@@ -1,0 +1,357 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   KnowledgeNetwork Design System — TOKENS
+   Generated from the design system project. DO NOT EDIT BY HAND.
+
+   This file is the single source of truth for every value in the app. It is a
+   flat concatenation of the design system's token files, in cascade order:
+     fonts · typography · colors · spacing · elevation · motion
+
+   Sync direction is one-way: design system → this file → the app.
+   If the app and this file disagree, this file is right.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+
+/* ══ tokens/fonts.css ══════════════════════════════════════════════════════ */
+/* FONTS — P.Kt has no licensed typefaces of its own, and the source app ships
+   no webfont at all (Tailwind v4 preflight's system stack). These two Google
+   families are a deliberate CHOICE for the round/natural direction, not a
+   recovery of something that existed. Swap them the day P.Kt licenses a face.
+
+   Quicksand  — geometric, fully rounded terminals. Display + pane titles.
+   Nunito     — rounded humanist, very legible at 11-13px. Everything else.
+   JetBrains Mono — ids, counts, code. Softer than Menlo, still monospaced.
+                    LOADED AT 400 AND 500 ONLY — a mono numeral asked for 600 or
+                    700 renders at 500, so weight steps on counts must be
+                    regular → medium, never medium → semibold. */
+@import url("https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* ══ tokens/typography.css ══════════════════════════════════════════════════════ */
+/* TYPOGRAPHY.
+   Two ramps live here on purpose.
+
+   --fs-*   is the P.Kt ramp: what new work should use.
+   --asbuilt-fs-* is what the source app renders today (9-11px, leading-tight).
+     Recorded because it is real and because a recreation has to match it, NOT
+     because it is a target. Anything a person READS rather than glances at is
+     --fs-body or larger. 11px (--fs-micro) is the floor, and only for numerals,
+     glyph marks and tags. */
+:root {
+  --font-display: "Quicksand", ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Nunito", ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* P.Kt ramp */
+  --fs-micro: 11px;    /* step numbers, via tags, glyph marks */
+  --fs-caption: 12px;  /* eyebrows, meta lines, sidebar section labels */
+  --fs-body: 13px;     /* THE workhorse: rows, chips, buttons, list items */
+  --fs-title: 15px;    /* pane titles, card titles */
+  --fs-head: 18px;     /* document title */
+  --fs-display: 28px;  /* screen headline */
+  --fs-display-lg: 44px; /* the one big number / the brand line */
+
+  /* as-built, from src/instruments/**: Tailwind arbitrary sizes */
+  --asbuilt-fs-micro: 9px;
+  --asbuilt-fs-meta: 9.5px;
+  --asbuilt-fs-caption: 10px;
+  --asbuilt-fs-label: 10.5px;
+  --asbuilt-fs-body: 11px;
+  --asbuilt-fs-pane: 12px;
+
+  --lh-tight: 1.15; /* @kind other */
+  --lh-snug: 1.35; /* @kind other */
+  --lh-normal: 1.6; /* @kind other */
+
+  --fw-regular: 400; /* @kind font */
+  --fw-medium: 500; /* @kind font */
+  --fw-semibold: 600; /* @kind font */
+  --fw-bold: 700; /* @kind font */
+  --fw-heavy: 800; /* @kind font */
+
+  --ls-display: -0.015em; /* @kind other */
+  --ls-eyebrow: 0.08em; /* @kind other */
+  --ls-normal: 0; /* @kind other */
+
+  --tnum: tabular-nums; /* @kind other */
+}
+
+/* ══ tokens/colors.css ══════════════════════════════════════════════════════ */
+/* COLORS.
+
+   Two families, and they never mix roles:
+   1. CHROME — the forest neutrals + moss/acorn/pond accents. Everything the
+      interface is made of.
+   2. DATA — domain identity and edge kinds. Authored in the corpus
+      (src/corpus/graph.ts) and load-bearing: a colour here is a claim about
+      what a node IS. The raw authored hex is preserved as --*-raw; the
+      --domain-* / --edge-* values are the P.Kt naturalisation of the SAME hues
+      (lower chroma, mid lightness) so they sit on paper instead of shouting.
+      Use --*-raw only when matching the current build pixel for pixel. */
+:root {
+  /* ── Bark: the warm neutral ramp. Paper, not slate. ─────────────────── */
+  --bark-50:  #faf8f4;
+  --bark-100: #f2eee6;
+  --bark-200: #e6e0d4;
+  --bark-300: #d3cabb;
+  --bark-400: #b0a693;
+  --bark-500: #8a8071;
+  --bark-600: #6b6255;
+  --bark-700: #4e483e;
+  --bark-800: #35312a;
+  --bark-900: #23201b;
+
+  /* ── Moss: the primary. Growth, containment, "yes". ─────────────────── */
+  --moss-50:  #f0f5ee;
+  --moss-100: #dfe9da;
+  --moss-200: #c2d6ba;
+  --moss-300: #9dbd93;
+  --moss-400: #74a068;
+  --moss-500: #558148;
+  --moss-600: #416838;
+  --moss-700: #33512d;
+  --moss-800: #263c22;
+
+  /* ── Acorn: the walk. Reserved — it means "on the authored path". ───── */
+  --acorn-50:  #fbf4e8;
+  --acorn-100: #f5e6cb;
+  --acorn-200: #eccfa0;
+  --acorn-300: #ddb26e;
+  --acorn-400: #cb9441;
+  --acorn-500: #b47a2b;
+  --acorn-600: #94611f;
+
+  /* ── Pond: selection and cross-pane correspondence only. ────────────── */
+  --pond-50:  #eef3f7;
+  --pond-100: #dae7ef;
+  --pond-200: #bcd3e3;
+  --pond-300: #99bcd5;
+  --pond-400: #6f9dbd;
+  --pond-500: #4f80a2;
+  --pond-600: #3d6884;
+
+  /* ── Berry: destructive only. ───────────────────────────────────────── */
+  --berry-50:  #fbf0ee;
+  --berry-100: #f5dcd8;
+  --berry-500: #b4574a;
+  --berry-600: #99453a;
+
+  /* ── DATA · domain identity (6 hue-disjoint slots) ──────────────────── */
+  --domain-sys:  #4a8a3c;  /* leaf   — computer systems, hardware */
+  --domain-math: #6b5ca8;  /* iris   — mathematical foundations */
+  --domain-cs:   #3f7bb0;  /* river  — core computer science */
+  --domain-net:  #3d9199;  /* pond   — networking */
+  --domain-sec:  #c08a2e;  /* honey  — security */
+  --domain-se:   #4aa583;  /* fern   — software engineering */
+
+  /* authored in src/corpus/graph.ts — do not round, do not derive */
+  --domain-sys-raw:  #008300;
+  --domain-math-raw: #4a3aa7;
+  --domain-cs-raw:   #2a78d6;
+  --domain-net-raw:  #0891b2;
+  --domain-sec-raw:  #eda100;
+  --domain-se-raw:   #1baf7a;
+
+  /* ── DATA · edge kinds (hue-disjoint from the domains, on purpose) ──── */
+  --edge-depends-on: #ada291;  /* the backbone recedes: it is the common case */
+  --edge-uses: #cf7043;        /* clay */
+  --edge-see-also: #c37fa0;    /* mallow */
+  --edge-implemented-with: #b0524a; /* brick */
+  --edge-mixed: #8a8071;
+
+  --edge-depends-on-raw: #94a3b8;
+  --edge-uses-raw: #eb6834;
+  --edge-see-also-raw: #e87ba4;
+  --edge-implemented-with-raw: #e34948;
+  --edge-mixed-raw: #64748b;
+
+  /* per-node derived swatch roles — recompute in OKLCH with src/model/color.ts
+     (arc span 46deg, sibling floor 11deg, KEEP 0.82). These are the fallbacks. */
+  --swatch-anchor-fallback: #8a8071; /* @kind color */
+  --swatch-fill-fallback: #ece7dd;
+  --swatch-ink-fallback: #4e483e;
+  --swatch-ink-strong-fallback: #23201b;
+
+  /* ── Surfaces ───────────────────────────────────────────────────────── */
+  --surface-canopy: #f2eee6;   /* the desk behind every pane */
+  --surface-paper: #fdfcfa;    /* a pane */
+  --surface-raised: #ffffff;   /* a card / a node: raised, always lightest */
+  --surface-sunken: #eae4d9;   /* a well: a group, recessed */
+  --surface-sunken-2: #e2dbcd;
+  --surface-hover: rgba(53, 49, 42, 0.04);
+  --surface-hover-raised: #faf8f4;  /* the hovered face of a RAISED element — a wash can't tint white */
+  --surface-press: rgba(53, 49, 42, 0.07);
+  --surface-veil: rgba(253, 252, 250, 0.72);  /* the only translucency */
+
+  /* ── Borders ────────────────────────────────────────────────────────── */
+  --border-hair: rgba(53, 49, 42, 0.17);   /* divisions inside a pane */
+  --border-rule: rgba(53, 49, 42, 0.25);   /* pane and card edges */
+  --border-frame: var(--bark-400);         /* a PANE's own frame — visible on purpose */
+  --border-strong: rgba(53, 49, 42, 0.28); /* a thing you can act on */
+  --border-dashed: var(--bark-300);        /* dashed ALWAYS means conditional */
+
+  /* ── Ink ────────────────────────────────────────────────────────────── */
+  --text-1: var(--bark-800);
+  --text-2: var(--bark-700);
+  --text-3: var(--bark-500);
+  --text-inverse: #fdfcfa;
+  --text-accent: var(--moss-700);
+  --text-walk: var(--acorn-600);
+
+  /* ── State ──────────────────────────────────────────────────────────── */
+  --accent-primary: var(--moss-500);
+  --accent-primary-ink: var(--moss-700);
+  --accent-primary-wash: var(--moss-50);
+  --accent-walk: var(--acorn-500);
+  --accent-walk-wash: var(--acorn-50);
+  --state-selected: var(--pond-500);
+  --state-selected-wash: var(--pond-50);
+  --state-linked: var(--pond-300);   /* cross-pane hover correspondence only */
+  --state-danger: var(--berry-500);
+  --state-danger-wash: var(--berry-50);
+  --state-optional: var(--acorn-300);
+}
+
+/* ══ tokens/spacing.css ══════════════════════════════════════════════════════ */
+/* SPACING & GEOMETRY.
+
+   The generic scale is a 4px grid with a 6px half-step (the round shapes need
+   a little more air than a strict 4 gives).
+
+   The --road-* block is different in kind: those are LIVE LAYOUT CONSTANTS
+   from src/instruments/walkdesk/AuthorRoad.tsx. The road does measure-free
+   layout, so the numbers ARE the layout — change one here and change it there.
+   They are recorded verbatim, un-rounded. */
+:root {
+  --space-05: 2px;
+  --space-1: 4px;
+  --space-15: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── Radii — the brand is ROUND. Nothing in a P.Kt UI is square. ────── */
+  --radius-xs: 6px;    /* inline fields, tiny tags */
+  --radius-sm: 10px;   /* buttons, tabs, rows */
+  --radius-md: 14px;   /* menus, drop zones, inputs */
+  --radius-lg: 20px;   /* cards, panes */
+  --radius-xl: 28px;   /* the app shell, big surfaces */
+  --radius-pill: 999px;/* chips, dots, node stops, counters */
+
+  /* ── Strokes ────────────────────────────────────────────────────────── */
+  --stroke-hair: 1px;
+  --stroke-rule: 1.5px;
+  --stroke-node: 2px;      /* a node's own border, in its domain colour */
+  --stroke-ring: 2px;      /* selection / correspondence rings */
+  --dash-conditional: 4 4; /* @kind other */
+
+  /* ── Hit targets ────────────────────────────────────────────────────── */
+  --hit-min: 28px;         /* any clickable control in a dense pane */
+  --hit-comfortable: 36px;
+
+  /* ── Pane furniture ─────────────────────────────────────────────────── */
+  --pane-header-h: 34px;
+  --pane-pad-x: 14px;
+  --pane-pad-y: 10px;
+  --sidebar-w: 208px;      /* w-52, as built (StudioView) */
+  --tree-w: 240px;         /* Tree instrument, flex { fixed: 240 } */
+  --walkstack-w: 372px;    /* Walk-Stack instrument, flex { fixed: 372 } */
+  --walk-strip-h: 240px;   /* Walk instrument height */
+  --trail-strip-h: 92px;   /* TrailStrip h-[92px] */
+
+  /* ── Road geometry — AuthorRoad.tsx constants, as built ─────────────── */
+  --road-node-w: 150px;      /* NODEW */
+  --road-node-h: 34px;       /* NODEH */
+  --road-gap: 26px;          /* AGAP — the arrow lives in this gap */
+  --road-pad: 10px;          /* PAD */
+  --road-head-h: 28px;       /* HEAD */
+  --road-margin: 16px;       /* MARGIN */
+  --road-question-h: 18px;   /* QUESTION_H */
+  --road-tab-h: 22px;        /* TAB_H */
+  --road-empty-body-h: 30px; /* EMPTY_BODY_H */
+  --road-slot-h: 18px;       /* SLOTH */
+  --road-sel-pad: 7px;       /* SELPAD */
+  --rail-w: 186px;           /* RAIL_W — projected-route column */
+}
+
+/* ══ tokens/elevation.css ══════════════════════════════════════════════════════ */
+/* ELEVATION.
+
+   Shadows are WARM — cast in bark, never in blue-grey. They are soft, wide and
+   low-contrast: a P.Kt surface sits on the page, it does not float above it.
+
+   Containment reads as depth, not hue:
+     a node          -> raised   (--lift-1, white face)
+     an open group   -> recessed (--sink-1, --surface-sunken)
+     a folded group  -> raised again, with the well tint stacked behind it
+   Never a lift and a sink on the same element. */
+:root {
+  --lift-1: 0 1px 2px rgba(53, 49, 42, 0.06), 0 4px 10px -6px rgba(53, 49, 42, 0.18);
+  --lift-2: 0 1px 2px rgba(53, 49, 42, 0.07), 0 10px 20px -12px rgba(53, 49, 42, 0.28);
+  --lift-3: 0 2px 4px rgba(53, 49, 42, 0.08), 0 20px 36px -16px rgba(53, 49, 42, 0.34);
+  --lift-drag: 0 3px 6px rgba(53, 49, 42, 0.10), 0 26px 44px -18px rgba(53, 49, 42, 0.40);
+
+  --sink-1: inset 0 1px 3px rgba(53, 49, 42, 0.10), inset 0 0 0 1px rgba(255, 255, 255, 0.55); /* @kind shadow */
+  --sink-2: inset 0 2px 5px rgba(53, 49, 42, 0.13), inset 0 0 0 1px rgba(255, 255, 255, 0.5); /* @kind shadow */
+
+  /* rings — one ring per meaning, never stacked */
+  --ring-selected: 0 0 0 2px var(--state-selected);
+  --ring-linked: 0 0 0 1.5px var(--state-linked);  /* softest ring — correspondence, not commitment */
+  --ring-primary: 0 0 0 2px var(--accent-primary);
+  --ring-walk: 0 0 0 2px var(--accent-walk);
+  --ring-danger: 0 0 0 2px var(--state-danger);
+  --ring-focus: 0 0 0 3px rgba(79, 128, 162, 0.32);  /* keyboard focus only */
+
+  /* dimming */
+  --opacity-off-path: 0.5; /* @kind other */
+  --opacity-drag-rest: 0.35; /* @kind other */
+  --opacity-disabled: 0.35; /* @kind other */
+}
+
+/* ══ tokens/motion.css ══════════════════════════════════════════════════════ */
+/* MOTION.
+   The repo's own rule, kept: a relayout should be LEGIBLE — "nodes visibly
+   make room" — not a teleport. Nothing bounces, nothing springs, nothing
+   overshoots. Durations are the as-built ones; the easing is softened.
+   Never animate colour. */
+:root {
+  --dur-tap: 90ms; /* @kind other */
+  --dur-hover: 140ms; /* @kind other */
+  --dur-trace: 180ms; /* @kind other */
+  --dur-move: 200ms; /* @kind other */
+  --dur-fade: 250ms; /* @kind other */
+  --dur-enter: 280ms; /* @kind other */
+  --dur-relayout: 300ms; /* @kind other */
+
+  --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1); /* @kind other */
+  --ease-settle: cubic-bezier(0.32, 0.72, 0, 1); /* @kind other */
+  --ease-linear: linear; /* @kind other */
+
+  --transition-block: left var(--dur-move) var(--ease-settle),
+                      top var(--dur-move) var(--ease-settle),
+                      width var(--dur-move) var(--ease-settle),
+                      height var(--dur-move) var(--ease-settle); /* @kind other */
+  --transition-wash: background-color var(--dur-hover) var(--ease-soft),
+                     border-color var(--dur-hover) var(--ease-soft),
+                     box-shadow var(--dur-hover) var(--ease-soft); /* @kind other */
+  --transition-trace: opacity var(--dur-trace) var(--ease-soft),
+                      stroke-width var(--dur-trace) var(--ease-soft); /* @kind other */
+}
+
+/* scope change enters FROM its navigation direction (src/index.css) */
+@keyframes drill-down { from { opacity: 0; transform: scale(0.82); } }
+@keyframes drill-up { from { opacity: 0; transform: scale(1.18); } }
+@keyframes drill-left { from { opacity: 0; transform: translateX(-90px); } }
+@keyframes drill-right { from { opacity: 0; transform: translateX(90px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-move: 1ms; /* @kind other */
+    --dur-fade: 1ms; /* @kind other */
+    --dur-enter: 1ms; /* @kind other */
+    --dur-relayout: 1ms; /* @kind other */
+  }
+}
