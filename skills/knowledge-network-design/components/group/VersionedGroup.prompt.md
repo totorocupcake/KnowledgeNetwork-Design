@@ -155,6 +155,11 @@ const [active, setActive] = useState('a')
   group sits among its siblings — so it renders outside the editable string, in
   mono like every other figure. Renaming never disturbs it and re-ordering never
   has to rewrite a name.
+- **Nodes belong to the VERSION, not to the group.** The children are whatever the
+  caller renders for the live version, so keep them keyed by version id: a version
+  added at runtime has no nodes and must come up on the dashed "drag one in" zone.
+  Holding one list per group is the easy mistake — a new version then inherits the
+  previous one's contents, which is precisely what versioning is for avoiding.
 - **The body is a `NodeChain`.** A version's contents are a chain like any other, so
   the group hands them to one rather than keeping a second, poorer copy of that
   behaviour: the arrows, drag-to-reorder and the derived numbering are the chain's.

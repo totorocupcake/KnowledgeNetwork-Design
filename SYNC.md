@@ -37,6 +37,11 @@ Two rules this round produced, both now in `readme.md` and `SKILL.md`:
 - **Everything that recedes runs on `window.PKT_SB.LEAVE`**, and anything hidden by
   opacity also leaves the tab order.
 
+One ownership rule for the app to get right: **nodes belong to the version, not to
+the group.** The group renders whatever children it is given for the live version, so
+the app must key them by version id — hold one list per group and a new version
+inherits the previous one's nodes, which is the one thing versioning exists to avoid.
+
 Two acts, two different answers, worth keeping straight when the app implements
 them: deleting a version **asks** (it destroys nodes you cannot see), ungrouping a
 multi-version group is **refused** (it would silently discard all but one version,
