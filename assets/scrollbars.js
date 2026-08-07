@@ -78,8 +78,14 @@
     if (el && inGutter(el, e.clientX, e.clientY)) { dragging = el; set(el, 'near') }
   }, true)
 
-  addEventListener('pointerup', () => {
+  addEventListener('pointerup', e => {
     const d = dragging; dragging = null
+    if (!d) return
+    /* A click in the gutter must not flip near -> on -> near under a pointer
+       that never moved: releasing used to drop the bar to its resting width for
+       the one frame before the next pointermove put it back, which reads as a
+       blink. While the pointer is still in the gutter the bar stays 'near'. */
+    if (inGutter(d, e.clientX, e.clientY)) { current = d; set(d, 'near'); return }
     if (d === current) set(d, 'on'); else clear(d)
   })
 

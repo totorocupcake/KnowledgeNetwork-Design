@@ -99,7 +99,8 @@ from here. See **Caveats**.
 | `guidelines/*.html` | specimen cards — Brand · Colors · Type · Space · Motion |
 | `components/chrome/` | AppHeader · Toolbar · PaneHeader · PillButton · CountBadge · LeafMark |
 | `components/sidebar/` | PresetButton · InstrumentRow · InstrumentGroup · FamilyColumn · BinMark |
-| `components/graph/` | DomainDot · NodeChip · EdgeLegend · EdgeDash |
+| `components/graph/` | DomainDot · NodeChip · NodeArrow · NodeChain · EdgeLegend · EdgeDash |
+| `components/group/` | VersionedGroup |
 | `components/nav/` | TreeRow · TrailChip · StepDot · WalkCard |
 | `components/doc/` | DocHeader · SectionLabel |
 | `ui_kits/studio/` | the Studio, interactive, on the real corpus |
@@ -110,8 +111,8 @@ from here. See **Caveats**.
 ### Components
 
 `AppHeader`, `Toolbar`, `PaneHeader`, `PillButton`, `CountBadge`, `LeafMark`, `PresetButton`,
-`InstrumentRow`, `InstrumentGroup`, `BinMark`, `DomainDot`, `NodeChip`, `EdgeLegend`, `EdgeDash`, `TreeRow`, `TrailChip`,
-`StepDot`, `WalkCard`, `DocHeader`, `SectionLabel`.
+`InstrumentRow`, `InstrumentGroup`, `BinMark`, `DomainDot`, `NodeChip`, `NodeArrow`, `NodeChain`, `EdgeLegend`, `EdgeDash`, `TreeRow`, `TrailChip`,
+`StepDot`, `WalkCard`, `DocHeader`, `SectionLabel`, `VersionedGroup`.
 
 **Thin bars are SVG, not CSS boxes.** A 3px relation dash drawn as a `<span>` lands on a
 different subpixel offset in every row — line boxes above it are fractional — so some dashes
@@ -142,6 +143,25 @@ and a `.prompt.md` with a usage example.
   families (views / unfold / walks / lenses) rather than becoming an unscannable
   list. It reuses the tree's disclosure grammar rather than inventing a second
   way to nest.
+- **`NodeArrow`** — the arrow in the gap between two chained nodes. The road draws
+  one inline today (the gap is already reserved: `--road-gap`, 26px), and
+  `VersionedGroup` needed the same mark, so it is one component rather than two
+  hand-rolled SVGs. It says *leads to* and nothing else: sequence belongs to the
+  container, a typed relation belongs to `EdgeDash` with an `--edge-*` hue and the
+  corpus's own label. Acorn by default, because a chain inside a group is the
+  resolved road.
+- **`NodeChain`** — the sequence a chain of nodes forms, and the owner of their
+  order. Reordering could not live in the nodes: a chip that dragged itself would
+  need its siblings' sizes and order to know where it had landed. The chain also
+  fixes what a drag can MEAN — motion is constrained to its axis and lands on a slot,
+  because a sequence has no second dimension to move in.
+- **`VersionedGroup`** — a nested subgroup that keeps several versions of itself,
+  one on screen at a time. The source has no versioning surface at all; this is
+  the first, and it is built entirely out of existing grammar rather than a new
+  one: the containment well for the group, `bulletStyle` for which version is
+  live, `caretStyle` for the menu, inline fields at `--radius-xs` for naming.
+  The caret here opens the version list rather than folding the group — folding
+  stays with whatever draws it, so the two disclosures never contend.
 - **`BinMark`** / **`LeafMark`** — the system's only two drawn marks, and they are
   different categories: `BinMark` is an *icon* (Unicode has no bin in the house
   weight class), `LeafMark` is a decorative *motif*. Neither is licence to draw more.
@@ -158,6 +178,11 @@ Match it.
   `Explore`, `Reading` — proper nouns), instrument labels in the registry
   (`Map`, `Walk · Palette`), and corpus content, which is authored teaching
   material and keeps its own capitalisation (`TCP & UDP`).
+- **All caps carry `--ls-caps`.** Every uppercase string in the system — via
+  tags (`MAP`, `TREE`, `LNK`), document eyebrows, toolbar group labels, axis
+  labels — is set with `letter-spacing: var(--ls-caps)` (0.12em). Caps at
+  default tracking read as one solid block at 11–12px. There is no
+  per-component exception; `--ls-eyebrow` is an alias of the same value.
 - **A pane header holds a title and nothing else.** No subtitle, no description,
   no explanatory line — if a pane needs to explain its mechanism, it does so in
   its body. Where prose does appear, it explains the mechanism, not the benefit:
@@ -313,7 +338,19 @@ else changes*. No scale, no translate, no shadow step, no hue change:
 
 A wash cannot tint white, which is why raised elements get their own token
 instead of a transparent overlay. Press is `--surface-press`. Both cards
-demonstrate it: `guidelines/state-icon-hover.html`. **Controls that live on a
+demonstrate it: `guidelines/state-icon-hover.html`.
+
+**A DESTRUCTIVE control wears its hue at rest, not on hover.** Because hover is a
+one-step wash of the element's OWN family and never a hue change, a ✕ that turns
+berry under the pointer breaks the rule twice over — it changes hue, and it
+withholds the one thing the user needed before pressing. So a delete control is
+`--state-danger` inked from the moment it is visible, and hovers within its own
+ramp: face `--state-danger-wash`, border `--state-danger`, ink one step down to
+`--berry-600`. Nothing else moves. Both `NodeChip`'s ✕ and `VersionedGroup`'s
+per-version ✕ follow it, and they are hidden until the row or chip is hovered or
+focused, so a berry mark never sits on a resting surface. A control that merely
+removes something from the composition — a pane's ✕, a group's ungroup — is NOT
+destructive and keeps the neutral recipe. **Controls that live on a
 frame recede with the pane.** A pane's ✕ follows the scrollbar's rule — absent
 at rest, present while the pointer or the keyboard is inside the pane, receding
 on the scrollbar's own grace period (`window.PKT_SB.LEAVE`) — and the
@@ -455,6 +492,13 @@ the same clock instead of inventing one.
 | rest | you are not in the pane | nothing — the pane reads as a solid sheet of paper |
 | `on` | pointer or focus is in the pane | one 4px bar, `--bark-300`. No track, no wash, no arrows |
 | `near` | pointer is in the gutter, or you are dragging | the bar grows to 7px, a faint wash appears behind it, and the end arrows arrive (1.6px chevrons, `#c8bfaf`) |
+
+**A state never flickers on the way to itself.** `near` holds for as long as the
+pointer is in the gutter, including across a click: releasing a press must not
+drop the bar to `on` for the frame before the next `pointermove` restores
+`near`. That one-frame round trip is invisible as logic and very visible as a
+blink. Any handler that *ends* an interaction (`pointerup`, drag end) re-reads
+where the pointer actually is rather than assuming the interaction is over.
 
 The bar is **`--bark-300` in both live states** — it widens, it never darkens.
 Hovering the gutter is an invitation, not a state change on the bar itself. The
@@ -648,7 +692,7 @@ location ("Computer Science / Networking / The stack"). Specimen:
 | kind | rule | source |
 | --- | --- | --- |
 | **name** | verbatim; never re-cased, re-worded or abbreviated. Truncates with an ellipsis, keeps its full text in `title` | corpus |
-| **category** | a closed set — *topic*, *container*. Uppercase `--fs-micro` + `--ls-eyebrow`; the only uppercase in the app | closed set |
+| **category** | a closed set — *topic*, *container*. Uppercase `--fs-micro` + `--ls-caps`; the only uppercase *prose* in the app | closed set |
 | **location** | ancestry, root first, joined with ` / `. Never shortened to the parent alone — the depth is the point | derived |
 | **relation** | the corpus's own `EDGE_LABEL`, always beside its coloured rule. Reverse direction is marked `←`, never reworded | corpus |
 | **authored prose** | stop notes and document bodies, verbatim. Never invented to fill a pane | corpus |
@@ -662,7 +706,8 @@ about the data.
 
 **Lower case is the house voice** — heads, actions, panes, hints. Two exceptions:
 names keep the corpus's casing, and categories are uppercase precisely because
-nothing else is.
+nothing else is. Anything that *is* uppercase — a category, a via tag, a group
+label — is tracked out with `--ls-caps`.
 
 **Absence is not emptiness.** "no typed links — this node shows containment" states
 a structural fact; "no results" hides one.

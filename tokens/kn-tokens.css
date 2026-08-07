@@ -68,7 +68,9 @@
   --fw-heavy: 800; /* @kind font */
 
   --ls-display: -0.015em; /* @kind other */
-  --ls-eyebrow: 0.08em; /* @kind other */
+  /* every all-caps string carries --ls-caps; --ls-eyebrow is its alias */
+  --ls-caps: 0.12em; /* @kind other */
+  --ls-eyebrow: var(--ls-caps); /* @kind other */
   --ls-normal: 0; /* @kind other */
 
   --tnum: tabular-nums; /* @kind other */

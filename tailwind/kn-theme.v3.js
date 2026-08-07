@@ -45,7 +45,7 @@ module.exports = {
     regular: 'var(--fw-regular)', medium: 'var(--fw-medium)',
     semibold: 'var(--fw-semibold)', bold: 'var(--fw-bold)', heavy: 'var(--fw-heavy)',
   },
-  letterSpacing: { display: 'var(--ls-display)', eyebrow: 'var(--ls-eyebrow)' },
+  letterSpacing: { display: 'var(--ls-display)', caps: 'var(--ls-caps)', eyebrow: 'var(--ls-eyebrow)' },
 
   colors: {
     bark: ramp('bark', [50, 100, 200, 300, 400, 500, 600, 700, 800, 900]),

@@ -51,7 +51,7 @@ breaks, you just lose the three-state behaviour.
 | `tailwind/kn-theme.css` | Tailwind v4 `@theme`. Turns tokens into classes so no rule needs an arbitrary value. |
 | `tailwind/kn-theme.v3.js` | Tailwind v3 fallback. Delete on v4. |
 | `assets/scrollbars.js` | Sets `data-sb` / `data-sb-js` for the scrollbar states. |
-| `skills/knowledge-network-design/` | The rules, for Claude Code. Read by the agent, not the bundler. `SKILL.md` is the entry point, `readme.md` the full argument, `components/contracts.d.ts` the prop shapes, `components/<area>/*.prompt.md` the per-component traps. |
+| `skills/knowledge-network-design/` | The rules, for Claude Code. Read by the agent, not the bundler. `SKILL.md` is the entry point, `readme.md` the full argument, `components/contracts.d.ts` the prop shapes, `components/<area>/*.prompt.md` the per-component traps (areas: chrome, sidebar, graph, nav, doc, group). |
 
 `kn-tokens.css` and `kn-theme.css` restate the same values — the first as
 `--moss-500`, the second as `--color-moss-500`. That duplication is deliberate:

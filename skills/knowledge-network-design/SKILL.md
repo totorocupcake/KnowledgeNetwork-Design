@@ -70,6 +70,23 @@ structure.
   thicker. Use an SVG `rect` with `shape-rendering="crispEdges"` — see
   `EdgeDash` in `components/contracts.d.ts`.
 - **Dashed borders always mean conditional.** Never decorative.
+- **A destructive control wears berry AT REST, not on hover.** Hover is a one-step
+  wash of an element's own family and never a hue change, so a ✕ that turns berry
+  under the pointer breaks the rule and withholds the warning until it is too late
+  to matter. Delete controls are `--state-danger` inked from the moment they are
+  visible. Removing something from a composition — a pane's ✕, a group's ungroup —
+  is NOT destructive: neutral recipe.
+- **Everything that recedes shares one clock**, `window.PKT_SB.LEAVE` from
+  `scrollbars.js`: the scrollbar, a pane's ✕, a group's controls, a chip's ✕. Never
+  invent a second timeout.
+- **A hidden control must leave the tab order.** `opacity: 0` and
+  `pointer-events: none` do not stop Enter, so anything that recedes also takes
+  `tabIndex={-1}` while hidden — otherwise a keyboard lands on an invisible delete.
+- **Order belongs to the container, not the item.** A node does not drag itself; the
+  chain it sits in owns reordering, constrains the drag to its own axis, and hands
+  each child its step number. See `NodeChain`.
+- **A count needs its word.** A bare figure beside a control reads as a stray number.
+  Mono figure, lower-case noun, one ink step down.
 
 ## Migrating off the as-built sizes
 

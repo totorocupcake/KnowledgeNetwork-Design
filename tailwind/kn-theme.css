@@ -57,7 +57,9 @@
   --font-weight-heavy: 800;
 
   --tracking-display: -0.015em;
-  --tracking-eyebrow: 0.08em;
+  /* every all-caps string carries tracking-caps; eyebrow is its alias */
+  --tracking-caps: 0.12em;
+  --tracking-eyebrow: var(--tracking-caps);
 
   /* ══ Colour · chrome ramps ════════════════════════════════════════════════ */
   --color-bark-50: #faf8f4;

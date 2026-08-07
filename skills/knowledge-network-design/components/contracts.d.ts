@@ -298,7 +298,15 @@ export function EdgeDash(props: EdgeDashProps): JSX.Element
  */
 export interface NodeChipProps {
   title: string
+  /** the node's step number in its container ("2.1") — derived, mono, tabular,
+   *  --fs-micro at --text-3: a figure glanced at beside the name, never level with
+   *  it. `VersionedGroup` fills this in for its own children */
+  index?: string
   domain: 'sys' | 'math' | 'cs' | 'net' | 'sec' | 'se'
+  /** which carrier holds the domain colour. 'dot' (default) is the dense form for
+   *  trails, legends and rails; 'border' is a 1.5px domain-coloured edge with no disc,
+   *  for a node standing on its own — a stop inside a group, a node on the road */
+  mark?: 'dot' | 'border'
   /** off the resolved path: no lift, no fill, --opacity-off-path */
   dim?: boolean
   /** cross-pane hover correspondence — a 1.5px pond ring over the chip's own lift */
@@ -306,8 +314,190 @@ export interface NodeChipProps {
   /** tooltip; the stop's note when there is one */
   note?: string
   onClick?: () => void
+  /** drag the chip's right edge, bottom edge or corner to size it; double-click an edge
+   *  gives that dimension back to automatic. Default true */
+  resizable?: boolean
+  minWidth?: number
+  maxWidth?: number
+  minHeight?: number
+  maxHeight?: number
+  /** delete this node — adds a ✕ at the chip's trailing edge that arrives with hover
+   *  or focus, hovers to berry, and keeps its space reserved so the chip never
+   *  changes width */
+  onDelete?: () => void
 }
 export function NodeChip(props: NodeChipProps): JSX.Element
+
+/* ── graph/NodeArrow ─────────────────────────────────────────────── */
+/**
+ * The arrow between two nodes — sequence, not a typed relation. `EdgeDash` and
+ * `EdgeLegend` carry the corpus's relation kinds and their names; this carries the
+ * containing group's own order, so it has neither hue nor label.
+ */
+export interface NodeArrowProps {
+  /** 'down' for a stacked chain (the default), 'right' for a row */
+  direction?: 'down' | 'right'
+  /** the shaft, in px, before the head. Default 14 */
+  length?: number
+  /** 'walk' (acorn — on the authored path, the default), 'quiet' (bark-400),
+   *  'hint' (bark-300). Never a --domain-* or --edge-* hue */
+  tone?: 'walk' | 'quiet' | 'hint'
+  /** conditional: an optional step, a gap awaiting a node. Dashed never decorates */
+  dashed?: boolean
+  /** an explicit paint, for the rare case a caller owns the colour */
+  color?: string
+  /** give the arrow a title and it stops being decorative to a screen reader */
+  title?: string
+}
+export function NodeArrow(props: NodeArrowProps): JSX.Element
+
+/* ── graph/NodeChain ─────────────────────────────────────────────── */
+/**
+ * A chain of nodes and groups — the sequence, its arrows, and its order.
+ *
+ * Reordering lives here rather than in the nodes: a chip that dragged itself would
+ * need to know its siblings, their sizes and their order to know where it landed,
+ * and the chain knows all three. A dragged node is constrained to the chain's axis
+ * and lands on a slot; a chain is a sequence, so a different position in it is the
+ * only thing a drag can mean.
+ */
+export interface NodeChainProps {
+  /** the nodes, in order — `NodeChip`s, `VersionedGroup`s, or both */
+  children?: React.ReactNode
+  /** 'down' (default) or 'right' */
+  direction?: 'down' | 'right'
+  /** extra space between slots, on top of the arrow. Default 0 */
+  gap?: number
+  /** draw a `NodeArrow` in every gap. Default true */
+  arrow?: boolean
+  /** props forwarded to each arrow — `tone`, `length`, `dashed` */
+  arrowProps?: Record<string, unknown>
+  /** drag to reorder. Default true */
+  reorderable?: boolean
+  /** hand each child its position as `index` — the chain renumbers on reorder */
+  number?: boolean
+  /** the parent's own number, so a nested chain numbers 2.1, 2.2 under "2." */
+  prefix?: string
+  /** positions, not ids: the slot the node came from and the slot it landed on.
+   *  Pass this and the caller owns the order; omit it and the chain keeps its own */
+  onReorder?: (from: number, to: number) => void
+}
+export function NodeChain(props: NodeChainProps): JSX.Element
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GROUP — the versioned subgroup: a container that holds several versions of
+   itself and shows exactly one.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── group/VersionedGroup ─────────────────────────────────────────────── */
+/**
+ * A nested subgroup that holds several versions of itself, exactly one of which is
+ * on screen. Four rows: the group's name with its tally and fold control, the
+ * group's one description, the version picker, then the contents chained by arrows.
+ *
+ * The contents hang off one hairline rail under the picker, because they follow the
+ * version rather than the group.
+ *
+ * Open, it is the recessed well (`--surface-sunken` + `--sink-1`) with raised
+ * children inside. Folded, it is a node again: raised white face, well tint
+ * stacked behind, tally still showing. No domain dot — a group's contents can
+ * span domains, and one dot on the head would claim one of them for all of it.
+ */
+export interface GroupVersion {
+  id: string
+  /** the version's own name — authored text, verbatim. Wraps to two lines */
+  name: string
+  /** a short designation of the version's own (`v2`) — mono, tabular. Normally
+   *  omitted: the name tells versions apart, and an ordinal goes stale on delete */
+  label?: string
+}
+export interface VersionedGroupProps {
+  /** the group's name — rank 4, editable on click. Wraps to two lines open, three
+   *  folded. The number is NOT part of it */
+  title: string
+  /** the group's position among its siblings ("2."). Derived, mono, never editable.
+   *  The children's own numbers come from it: 2. contains 2.1, 2.2, 2.3 */
+  index?: string
+  /** pass false to stop handing step numbers down to the children */
+  numberSteps?: boolean
+  /** the body is a `NodeChain`: pass this and the caller owns the order of the
+   *  version's nodes; omit it and the chain keeps its own */
+  onReorderNodes?: (from: number, to: number) => void
+  /** how wide the group may grow. Default 300 */
+  maxWidth?: number | string
+  /** how tall the contents may grow before they scroll. Default 260 */
+  bodyMaxHeight?: number | string
+  /** how tall the version menu may grow before it scrolls. Default 240 */
+  menuMaxHeight?: number | string
+  /** floor width while folded, so the title cannot be squeezed to one word per
+   *  line. Default 190 — below that the head's index and control cluster leave the
+   *  title too little room to wrap */
+  foldedMinWidth?: number | string
+  /** drag the right edge, bottom edge or corner to resize. Default true; folded
+   *  groups are not resizable */
+  resizable?: boolean
+  /** drag bounds: width floor 200, width ceiling 680, body-height floor 72 */
+  minWidth?: number
+  resizeMaxWidth?: number
+  minBodyHeight?: number
+  /** drag the group's own background to move it. Default true. The component
+   *  applies a transform; pass `onMove` to own the position yourself */
+  movable?: boolean
+  /** fired on pointer-up with the offset the group was carried to */
+  onMove?: (offset: { x: number; y: number }) => void
+  /** fired on pointer-up with the size the user settled on, and on a double-click
+   *  reset with `null` on the axis that went back to automatic */
+  onResize?: (size: { width: number | null; height: number | null }) => void
+  /** the group's description — one editable line under the title, true of every
+   *  version. Optional; omit `onDescribe` to make it read-only, and both to drop
+   *  the line entirely */
+  description?: string
+  /** what an empty version says. A new version starts with no nodes, so this is
+   *  the common case, not an error state — a dashed placeholder awaiting a node */
+  emptyLabel?: string
+  /** the invitation shown while `description` is empty — italic, --text-3 */
+  descPlaceholder?: string
+  versions: GroupVersion[]
+  /** the version on screen; falls back to the first */
+  activeId?: string
+  /** how many items are inside — defaults to the child count, override when the
+   *  body renders something other than one element per item */
+  count?: number
+  /** the word beside the tally, plural. Singular is derived. Default "nodes" */
+  countLabel?: string
+  /** controlled fold state; leave undefined and the fold button owns it */
+  folded?: boolean
+  defaultFolded?: boolean
+  /** the last row of the menu; lower-case verb phrase, set in italic */
+  addLabel?: string
+  /** open the version menu on mount — for specimens and screenshots only */
+  defaultOpen?: boolean
+  onRetitle?: (title: string) => void
+  onDescribe?: (description: string) => void
+  onSelect?: (id: string) => void
+  /** fired on Enter or blur after a double-click rename of the live version */
+  onRename?: (id: string, name: string) => void
+  /** create a version and select it — the picker then opens its rename field */
+  onAddVersion?: () => void
+  /** delete a version. The row's ✕ appears only while the group has more than one,
+   *  and only when this is passed. If the deleted version was live, select another */
+  onDeleteVersion?: (id: string) => void
+  /** override the note shown when ✕ is pressed on a multi-version group */
+  ungroupBlockedLabel?: string
+  /** ask before deleting a version, in the row itself. Default true */
+  confirmDelete?: boolean
+  /** fired with the next fold state; the component folds itself regardless */
+  onToggleFold?: (folded: boolean) => void
+  /** ungroup: pass a handler to add the `✕` beside the minimize button. Called with
+   *  the version to spill and how many nodes it holds — replace the group with those
+   *  nodes, in order, in the slot the group occupied; they inherit the parent's
+   *  numbering. Refused while the group holds more than one version: the component
+   *  says so and does not call this */
+  onClose?: (spill: { versionId: string; count: number }) => void
+  /** the group's contents — one element per item; arrows are drawn between them */
+  children?: React.ReactNode
+}
+export function VersionedGroup(props: VersionedGroupProps): JSX.Element
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NAV — Tree rows, trail chips, step dots, walk cards.
