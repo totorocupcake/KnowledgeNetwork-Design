@@ -266,6 +266,58 @@ export interface DomainDotProps {
 }
 export function DomainDot(props: DomainDotProps): JSX.Element
 
+/* ── graph/EdgeEntry ─────────────────────────────────── */
+/**
+ * One relationship, drawn: two nodes and the typed edge between them.
+ *
+ * An entry states a *sentence* — subject, verb, object — so the verb is what gets the
+ * emphasis. Both node names are usually already known from the context the entry sits
+ * in (a rail head, a group heading), and the relation is the only new word; it is set
+ * at body weight over a 3px rule in the relation's own colour, while the nodes recede
+ * to caption weight with a domain border and no fill.
+ *
+ * Meant for a recessed container — a well, a group, a sunken panel. On paper, use
+ * `NodeChip` instead: a raised chip reads as a node standing on a pane, and an entry
+ * is not standing anywhere.
+ */
+export interface EdgeEntryProps {
+  /** the name at the left end */
+  from: string
+  /** domain key for the left node's border — sys · math · cs · net · sec · se */
+  fromDomain?: string
+  /** mark the left node as the one the surrounding view is focused on — it picks up
+   *  the bold weight of the focus chip above, so the same node reads
+   *  as the same node down a list of entries */
+  fromAnchor?: boolean
+  /** the node the left one sits INSIDE, when the entry is filed under an ancestor
+   *  rather than under the node itself — drawn as a "Parent / " prefix, the same
+   *  ancestry grammar `DocHeader` uses. With `fromAnchor` the prefix takes the bold
+   *  weight and the child name sits beside it at ordinary weight */
+  fromWithin?: string
+  /** the name at the right end */
+  to: string
+  /** domain key for the right node's border */
+  toDomain?: string
+  /** mark the right node as the view's focus node. See `fromAnchor` */
+  toAnchor?: boolean
+  /** the node the right one sits inside. See `fromWithin` */
+  toWithin?: string
+  /** relation key — supplies both the colour and the label */
+  type?: 'depends_on' | 'uses' | 'see_also' | 'implemented_with'
+  /** override the label. Pass '' for an unlabelled connector */
+  relation?: string
+  /** override the line colour */
+  color?: string
+  /** which end receives the arrowhead. 'both' for a symmetric relation. Default 'out' */
+  direction?: 'out' | 'in' | 'both'
+  onFrom?: () => void
+  onTo?: () => void
+  /** the connector column's preferred width. It shrinks before the nodes do, to
+   *  84 or so in a narrow pane, but never below 64. Default 96 */
+  connectorWidth?: number
+}
+export function EdgeEntry(props: EdgeEntryProps): JSX.Element
+
 /* ── graph/EdgeLegend ─────────────────────────────────────────────── */
 /** The relation legend: one crisp rule per edge kind, labelled with the corpus's own wording. */
 export interface EdgeLegendProps {

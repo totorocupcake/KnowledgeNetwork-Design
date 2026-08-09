@@ -99,7 +99,7 @@ from here. See **Caveats**.
 | `guidelines/*.html` | specimen cards — Brand · Colors · Type · Space · Motion |
 | `components/chrome/` | AppHeader · Toolbar · PaneHeader · PillButton · CountBadge · LeafMark |
 | `components/sidebar/` | PresetButton · InstrumentRow · InstrumentGroup · FamilyColumn · BinMark |
-| `components/graph/` | DomainDot · NodeChip · NodeArrow · NodeChain · EdgeLegend · EdgeDash |
+| `components/graph/` | DomainDot · NodeChip · NodeArrow · NodeChain · EdgeEntry · EdgeLegend · EdgeDash |
 | `components/group/` | VersionedGroup |
 | `components/nav/` | TreeRow · TrailChip · StepDot · WalkCard |
 | `components/doc/` | DocHeader · SectionLabel |
@@ -111,7 +111,7 @@ from here. See **Caveats**.
 ### Components
 
 `AppHeader`, `Toolbar`, `PaneHeader`, `PillButton`, `CountBadge`, `LeafMark`, `PresetButton`,
-`InstrumentRow`, `InstrumentGroup`, `BinMark`, `DomainDot`, `NodeChip`, `NodeArrow`, `NodeChain`, `EdgeLegend`, `EdgeDash`, `TreeRow`, `TrailChip`,
+`InstrumentRow`, `InstrumentGroup`, `BinMark`, `DomainDot`, `NodeChip`, `NodeArrow`, `NodeChain`, `EdgeEntry`, `EdgeLegend`, `EdgeDash`, `TreeRow`, `TrailChip`,
 `StepDot`, `WalkCard`, `DocHeader`, `SectionLabel`, `VersionedGroup`.
 
 **Thin bars are SVG, not CSS boxes.** A 3px relation dash drawn as a `<span>` lands on a
@@ -413,6 +413,26 @@ small and too oddly proportioned at this size to read as a shape at all. Drawn
 strokes give exact weight at exact size, and rotating one element means open and
 closed can never drift apart — the turn animates the disclosure for free.
 
+**Draw it with border longhands, never the `border` shorthand.** `caretStyle` sets
+`borderRight` and `borderBottom` at `currentColor` and nothing else. Writing it as
+`border` plus `borderTop: 'none'` looks equivalent and is not: React diffs style
+objects key by key, so a re-render that changes only the shorthand's colour re-sets
+`border` and never re-sets the two sides that were switched off. The mark fills in,
+and the caret becomes a diamond the first time it is hovered. `currentColor` avoids
+the whole class of problem — the colour then lives on the wrapper and the border
+declarations never change at all.
+
+**Every disclosure in the system is that same mark, including the pair.** A row's own
+caret, the connections rail's head, and the rail's *expand all* / *collapse all* are
+all the rotated square: one mark for a single disclosure, **two of it stacked** for
+the act that opens or closes a whole level — down for expand, up for collapse. The
+pair is deliberately not a new drawn chevron. The drawn vocabulary is exactly two
+marks (`BinMark` and the caret), and a nesting affordance that invents a third is how
+an icon set starts; saying the same mark twice reads as *one level up* without adding
+anything to learn. `caretStyle` is a lower-case helper and does not cross the
+`window` boundary, so a UI kit or template repeats the recipe rather than importing
+it — repeat it, do not draw something new.
+
 **Borders and dashes.** `--border-hair` (9% → 13% → **17%** bark) divides inside a
 pane, `--border-rule` (15% → 20% → **25%**) edges a pane or card and is also the
 resting border of a list row you can click — both were lifted twice because at
@@ -438,8 +458,8 @@ enters *from its navigation direction* (`drill-down/up/left/right`, 280ms).
 1ms in `tokens/motion.css`.
 
 **Nesting is one grammar, used twice.** Wherever the system nests things — the
-containment tree, the instrument palette — it is `▾`/`▸` at **14px in a 16px
-slot** plus a **16px indent per level**, and the parent row reports its own state
+containment tree, the instrument palette, the connections rail — it is the drawn
+caret in a **16px slot** plus a **16px indent per level**, and the parent row reports its own state
 so folding
 hides detail without hiding information (a folded instrument family still shows
 how many of its members are on screen). Those two numbers are fixed: `TreeRow` is
@@ -571,10 +591,10 @@ a real, consistent vocabulary:
 | `⊞` | a group / "group the selection" |
 | `↺` | a revisit: this node already appeared |
 | `●` / `○` | on screen / benched; the chosen branch / an available one |
-| `▾` / `▸` | expanded / collapsed — **14px in a 16px slot**, in both `TreeRow` and `InstrumentGroup` |
 | `⤳` | a jump — the focus crossed a typed link |
 | `▶` | walk this / next stop |
 | `✦` | teach me this (generate a curriculum) |
+| the drawn caret | a disclosure — expanded / collapsed, in a **16px slot**; **two stacked** opens or closes a whole level. See "Marks are strokes, not fills" |
 | a drawn bin | delete a user-saved thing — `BinMark`, the system's one drawn **icon**, because `🗑` renders as emoji at 10.5px against a 12–15px glyph set |
 | a drawn leaf | `LeafMark`, the brand **motif** — a hand-drawn PNG asset, decorative, not an icon; see "No logo" above |
 | `⋯` | this block's actions |
@@ -598,10 +618,37 @@ tapered body — exists because Unicode has no bin in the house weight class
 (`🗑` renders as emoji at 10.5px). It is the single drawn icon in the system and
 should stay that way.
 
-The only other drawn graphics in the system are **data**: the connections diagram in
-`ui_kits/studio/panes.jsx` (ported from `PlexPanel.tsx`) draws SVG lines and
-circles because those lines *are* the edges. That is a chart, not an
-illustration.
+The connections diagram used to be the second exception — a drawn one, SVG lines and
+circles ported from `PlexPanel.tsx`. It is not any more. `ConnectionsPane` in
+`ui_kits/studio/panes.jsx` draws its edges as `EdgeEntry` rows: DOM boxes, a text
+arrowhead, and a shaft that is an SVG rect only for `EdgeDash`'s device-pixel reason
+— nothing about it is a picture. Nothing in the system is drawn now except `BinMark`
+and the disclosure caret.
+
+### The connections grammar
+
+A neighbourhood is a **rail**, not a diagram: the focus at the head, every neighbour
+a **stop** hanging off it, and the stop's rung carrying the one number that matters
+at rest — how many relationships run between the two. It grows in the only direction
+a pane can afford: a hundred neighbours is a longer rail, never a denser one, and
+nothing overlaps at any count because nothing shares a row. Opening a stop lists its
+relationships in full as `EdgeEntry` rows in a well.
+
+Three rules the pane encodes, and any other view of the graph should:
+
+- **A container's links are its children's links, rolled up.** The corpus authors
+  typed links between topics; a module or a domain has none of its own. An edge joins
+  the rail when **exactly one end is inside the focus's subtree** — both ends inside is
+  internal wiring, and drawing it would put the focus on both ends of its own entry.
+  The subtree is derived by walking `parent`, so it holds at any depth.
+- **An entry reached through a descendant says so.** Rolled-up edges are grouped
+  separately as *via children*, and the entry prints the path from the focus down to
+  the node that actually holds the link (`fromWithin`). "This depends on X" and
+  "something inside this depends on X" are different claims and must not be filed as
+  one. A path deeper than a step keeps its first segment and elides the rest.
+- **Every row opens on the same bold name.** Whether an entry is direct or reached
+  through a child, the emphasis sits on the **anchor** — the focus node — so a well
+  reads down a column instead of being re-parsed row by row.
 
 ---
 
