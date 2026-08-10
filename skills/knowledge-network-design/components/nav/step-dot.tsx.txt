@@ -1,0 +1,26 @@
+import type { StepDotProps } from '../contracts'
+import { WASH, cx } from '../wash'
+
+const SKIN = {
+  current: 'border-walk bg-walk text-ink-inverse',
+  done: 'border-acorn-200 bg-acorn-100 text-ink-walk',
+  ahead: 'border-rule bg-raised text-ink-3',
+} as const
+
+/** A numbered stop on the active walk: done, current, or ahead. */
+export function StepDot({ n, state = 'ahead', onClick, title }: StepDotProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={cx(
+        'grid size-6 shrink-0 cursor-pointer place-items-center rounded-full border p-0 font-mono text-micro font-medium tabular-nums',
+        SKIN[state] || SKIN.ahead,
+        WASH,
+      )}
+    >
+      {n}
+    </button>
+  )
+}

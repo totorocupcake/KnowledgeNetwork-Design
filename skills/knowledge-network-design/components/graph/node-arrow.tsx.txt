@@ -1,0 +1,97 @@
+import type { NodeArrowProps } from '../contracts'
+
+/** The arrow between two nodes: what the road draws in the gap it reserves for it
+ *  (`--road-gap`, 26px in AuthorRoad.tsx). It says one node LEADS TO the next —
+ *  sequence, not a typed relation. A typed relation is EdgeDash's job and carries
+ *  an `--edge-*` hue and a name; this arrow carries neither, because there is
+ *  nothing to name: it is the containing group's own order.
+ *
+ *  Acorn by default, and that is the one thing acorn means — on the authored path.
+ *  A chain of nodes inside a group IS the resolved road, so the arrow is walk
+ *  colour; pass tone="quiet" for bark where the sequence is structural rather than
+ *  authored, and never a `--domain-*` or `--edge-*` hue, which would read as a
+ *  claim about what kind of relation this is.
+ *
+ *  Drawn in SVG rather than as CSS boxes, for EdgeDash's reason: a 1.5px shaft set
+ *  as a <span> lands on a different subpixel offset in every gap — the line boxes
+ *  above it are fractional — so some shafts antialias across two device rows and
+ *  read visibly thicker than their neighbours in the same column. shapeRendering
+ *  snaps every instance to the same device pixel whatever its position.
+ *
+ *  Dashed always means conditional in this system: an optional step, a link that
+ *  only holds under a condition, a gap waiting for a node. Never dash for texture.
+ *
+ *  Everything below is SVG geometry, so it stays numeric — Tailwind has no
+ *  business inside a viewBox. */
+
+const TONE = { walk: 'var(--accent-walk)', quiet: 'var(--bark-400)', hint: 'var(--bark-300)' } as const
+/* --dash-conditional's value, inline: an SVG presentation attribute cannot read a
+   custom property, and var() there fails silently to "no dash". */
+const DASH = '4 4'
+
+export function NodeArrow({
+  direction = 'down',
+  length = 14,
+  tone = 'walk',
+  dashed,
+  color,
+  title,
+}: NodeArrowProps) {
+  const paint = color || TONE[tone] || TONE.walk
+  const HEAD = 8 // the head's length along the shaft
+  const HALF = 4.4 // half the head's width
+  const T = 1.5 // shaft thickness
+  const span = length + HEAD
+  const across = HALF * 2 + 3
+  const down = direction === 'down'
+  const w = down ? across : span
+  const h = down ? span : across
+  const mid = across / 2
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={'0 0 ' + w + ' ' + h}
+      aria-hidden={title ? undefined : 'true'}
+      role={title ? 'img' : undefined}
+      className="block shrink-0 overflow-visible"
+    >
+      {title ? <title>{title}</title> : null}
+      {down ? (
+        <>
+          <line
+            x1={mid}
+            y1="0"
+            x2={mid}
+            y2={length + 1}
+            stroke={paint}
+            strokeWidth={T}
+            strokeDasharray={dashed ? DASH : undefined}
+            shapeRendering={dashed ? undefined : 'crispEdges'}
+          />
+          <path
+            d={'M' + (mid - HALF) + ' ' + length + ' L' + mid + ' ' + span + ' L' + (mid + HALF) + ' ' + length + ' Z'}
+            fill={paint}
+          />
+        </>
+      ) : (
+        <>
+          <line
+            x1="0"
+            y1={mid}
+            x2={length + 1}
+            y2={mid}
+            stroke={paint}
+            strokeWidth={T}
+            strokeDasharray={dashed ? DASH : undefined}
+            shapeRendering={dashed ? undefined : 'crispEdges'}
+          />
+          <path
+            d={'M' + length + ' ' + (mid - HALF) + ' L' + span + ' ' + mid + ' L' + length + ' ' + (mid + HALF) + ' Z'}
+            fill={paint}
+          />
+        </>
+      )}
+    </svg>
+  )
+}

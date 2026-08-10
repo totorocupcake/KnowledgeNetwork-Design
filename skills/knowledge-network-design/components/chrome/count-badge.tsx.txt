@@ -1,0 +1,25 @@
+import type { CountBadgeProps } from '../contracts'
+import { cx } from '../wash'
+
+const TONE = {
+  quiet: 'bg-bark-100 text-ink-2',
+  primary: 'bg-primary-wash text-primary-ink',
+  walk: 'bg-walk-wash text-ink-walk',
+} as const
+
+/** A bare number with a lower-case label. Numbers are never dressed up:
+ *  "12 visited", not "12 items". The figure is mono and tabular so a live count
+ *  stops jittering as it changes. */
+export function CountBadge({ value, label, tone = 'quiet' }: CountBadgeProps) {
+  return (
+    <span
+      className={cx(
+        'inline-flex items-baseline gap-[5px] rounded-full px-[10px] py-[3px] font-ui text-caption font-semibold',
+        TONE[tone] || TONE.quiet,
+      )}
+    >
+      <span className="font-mono text-caption tabular-nums">{value}</span>
+      <span className="font-medium opacity-75">{label}</span>
+    </span>
+  )
+}

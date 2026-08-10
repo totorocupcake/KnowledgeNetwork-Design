@@ -1,0 +1,456 @@
+import { useEffect, useRef, useState } from 'react'
+import { byId, WALKS } from './corpus'
+import { cx } from '../components/wash'
+import { Toolbar } from '../components/chrome/toolbar'
+import { PaneHeader } from '../components/chrome/pane-header'
+import { PillButton } from '../components/chrome/pill-button'
+import { LeafMark } from '../components/chrome/leaf-mark'
+import { SectionLabel } from '../components/doc/section-label'
+import { PresetButton } from '../components/sidebar/preset-button'
+import { InstrumentRow } from '../components/sidebar/instrument-row'
+import { InstrumentGroup, FamilyColumn } from '../components/sidebar/instrument-group'
+import { MapPane, TreePane, ConnectionsPane, DocPane, TrailBar } from './panes'
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   THE STUDIO SHELL — the layout every screen in the product inherits.
+
+   Four bands, outside in:
+     1. `h-screen flex flex-col bg-canopy` — the desk. Canopy is the ONLY
+        full-bleed background; a pane never sits directly on white.
+     2. Toolbar — flex-none, the app's one docked action strip, with the leaf
+        motif cropped into its bottom-right corner.
+     3. The surface: `flex-1 min-h-0 flex gap-3 p-3`. The 12px gutter and the
+        12px inset are the same measure — a pane's distance to its neighbour and
+        to the window edge match, so the desk reads as one grid.
+     4. The palette (`w-[var(--sidebar-w)]`, 208px, flex-none) beside a column
+        that holds the instrument row above and the trail below, both at gap-3.
+
+   THE PANE ROW IS FLEX, NOT GRID, AND THE FLEX NUMBERS ARE THE LAYOUT. Each
+   instrument declares its own share in INSTRUMENTS below (`flex`), and a pane with
+   flex: 0 takes a fixed width from a token instead (`--tree-w`). Every pane wrapper
+   carries `min-w-0` so a long node title inside can never widen its own pane at the
+   expense of its neighbours — that single rule is what keeps the composition stable
+   as the focus changes.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+// The registry, mirrored from src/studio/instruments.tsx — the ids and labels
+// are the real ones. Only the four instruments this kit recreates are listed;
+// the rest are named in the readme rather than faked.
+const INSTRUMENTS = [
+  { id: 'nested', label: 'Map', flex: 1.9, min: 420 },
+  { id: 'tree', label: 'Tree', flex: 0 },
+  { id: 'children', label: 'Connections', flex: 1.3, min: 360 },
+  { id: 'doc', label: 'Document', flex: 1.1, min: 330 },
+]
+// The palette shows the registry's real inventory, grouped into families. Only
+// the four instruments this kit recreates are selectable; the rest are listed
+// with `soon` so the grouping is honest about what exists upstream.
+const FAMILIES = [
+  {
+    id: 'views',
+    label: 'views',
+    items: [
+      { id: 'nested', label: 'Map' },
+      { id: 'tree', label: 'Tree' },
+      { id: 'children', label: 'Connections' },
+      { id: 'doc', label: 'Document' },
+      { id: 'contours', label: 'Contours', soon: true },
+      { id: 'evoc', label: 'EVoC', soon: true },
+    ],
+  },
+  {
+    id: 'unfold',
+    label: 'unfold',
+    items: [
+      { id: 'unfold', label: 'Unfold', soon: true },
+      { id: 'unfold-graph', label: 'Unfold \u00b7 Graph', soon: true },
+    ],
+  },
+  {
+    id: 'walks',
+    label: 'walks',
+    items: [
+      { id: 'walk', label: 'Walk', soon: true },
+      { id: 'walk-palette', label: 'Walk \u00b7 Palette', soon: true },
+      { id: 'walk-columns', label: 'Walk \u00b7 Columns', soon: true },
+      { id: 'walk-stack', label: 'Walk \u00b7 Stack', soon: true },
+      { id: 'railroad', label: 'Railroad', soon: true },
+    ],
+  },
+  {
+    id: 'lenses',
+    label: 'lenses',
+    items: [
+      { id: 'lens-depends', label: 'builds on', swatch: 'var(--edge-depends-on)', soon: true },
+      { id: 'lens-uses', label: 'uses', swatch: 'var(--edge-uses)', soon: true },
+      { id: 'lens-also', label: 'see also', swatch: 'var(--edge-see-also)', soon: true },
+      { id: 'lens-impl', label: 'implemented with', swatch: 'var(--edge-implemented-with)', soon: true },
+    ],
+  },
+]
+const PRESETS = [
+  {
+    id: 'teaching',
+    label: 'Present',
+    hint: 'map + document + walk — accumulating, authored order',
+    active: ['nested', 'doc'],
+  },
+  {
+    id: 'cockpit',
+    label: 'Explore',
+    hint: 'map + connections + document — territory and prose on one focus',
+    active: ['nested', 'children', 'doc'],
+  },
+  {
+    id: 'reading',
+    label: 'Reading',
+    hint: 'tree beside the document — the list reading, nothing else',
+    active: ['tree', 'doc'],
+  },
+]
+
+// A palette-and-brush mark, drawn as a line glyph so it sits with the unicode
+// glyphs beside it: same weight, same currentColor, no fill but the wells.
+const PaletteGlyph = (
+  <svg
+    width="17"
+    height="17"
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="block"
+  >
+    <g transform="translate(0.3,0.4) scale(1.09)">
+      <path d="M9.2 2.6c3.9 0 7 2.6 7 5.9 0 2-1.6 3-3.1 3h-1.3c-.9 0-1.6.7-1.6 1.6 0 .4.1.7.3 1 .2.3.3.6.3 1 0 .9-.7 1.5-1.6 1.5-3.9 0-7-3.1-7-7s3.1-7 7-7Z" />
+      <circle cx="5.9" cy="6.6" r="1" fill="currentColor" stroke="none" />
+      <circle cx="9.4" cy="5.2" r="1" fill="currentColor" stroke="none" />
+      <circle cx="12.6" cy="7.2" r="1" fill="currentColor" stroke="none" />
+      <circle cx="4.9" cy="10.3" r="1" fill="currentColor" stroke="none" />
+    </g>
+    <path d="M18.7 1.8 12.7 7.8" strokeWidth="1.3" />
+    <path d="M12.4 8.2 11.7 8.9" strokeWidth="2.2" />
+    <path d="M11.2 9.5Q9.8 11.2 9 13.1 10.8 12.3 12 10.6Z" fill="currentColor" strokeWidth="0.9" />
+  </svg>
+)
+
+export interface StudioProps {
+  /** which PRESETS entry the composition opens on. Defaults to "cockpit". */
+  preset?: string
+  showTrail?: boolean
+  showPalette?: boolean
+  /** where the leaf artwork lives, relative to the page. */
+  assetBase?: string
+}
+
+export function Studio(props: StudioProps) {
+  const FAMILY_COL = FamilyColumn(FAMILIES.map((f) => f.label))
+  const initial = PRESETS.find((p) => p.id === props.preset) || PRESETS[1]
+  const [active, setActive] = useState<string[]>(initial.active)
+  const [presetId, setPresetId] = useState<string | null>(initial.id)
+  const [focus, setFocus] = useState('stk-tcp-udp')
+  const [trail, setTrail] = useState<Array<{ id: string; via?: string; jump?: boolean }>>([
+    { id: 'stk-dns-naming', via: 'MAP' },
+    { id: 'stk-ip-routing', via: 'TREE' },
+    { id: 'stk-tcp-udp', via: 'TREE' },
+  ])
+  const [walk, setWalk] = useState<string | null>(null)
+  const [cursor, setCursor] = useState(0)
+  const [, setVisited] = useState(() => new Set(['stk-dns-naming', 'stk-ip-routing', 'stk-tcp-udp']))
+
+  const go = (id: string, via?: string, jump?: boolean) => {
+    setFocus(id)
+    setTrail((t) => t.concat([{ id, via: via || 'NAV', jump: !!jump }]))
+    setVisited((v) => new Set(v).add(id))
+  }
+  const toggle = (id: string) => {
+    setActive((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : prev.concat([id])))
+    setPresetId(null)
+  }
+  const startWalk = (id: string, at: number) => {
+    const w = WALKS.find((x) => x.id === id)!
+    setWalk(id)
+    setCursor(at)
+    go(w.stops[at].id, 'WLK', true)
+  }
+  const jumpTo = (i: number) => {
+    const w = WALKS.find((x) => x.id === walk)!
+    setCursor(i)
+    go(w.stops[i].id, 'WLK', true)
+  }
+  const advance = () => jumpTo(cursor + 1)
+
+  const [showTrail, setShowTrail] = useState(props.showTrail !== false)
+  const [showPalette, setShowPalette] = useState(props.showPalette !== false)
+  const [custom, setCustom] = useState<Array<{ id: string; label: string; hint: string; active: string[] }>>([])
+  // a preset being named. It is named in place, at the foot of the presets list,
+  // so you name it where it will live rather than in a dialog over the top.
+  const [draft, setDraft] = useState<{ id: string; label: string; hint: string; active: string[] } | null>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const draftRef = useRef<HTMLDivElement>(null)
+  // depend on the draft's IDENTITY, not the object — the object changes on every
+  // keystroke, and re-running select() there re-selects the text so the next
+  // character replaces it (the classic "only one letter" bug).
+  useEffect(() => {
+    if (draft && nameRef.current) nameRef.current.select()
+  }, [draft && draft.id])
+  const commitDraft = () => {
+    if (!draft) return
+    const label = (draft.label || '').trim() || 'Custom preset'
+    const p = { id: draft.id, label, hint: (draft.hint || '').trim(), active: draft.active }
+    setCustom((c) => c.concat([p]))
+    setPresetId(p.id)
+    setDraft(null)
+  }
+  const [folded, setFolded] = useState(() => new Set(['unfold', 'walks', 'lenses']))
+  const fold = (id: string) =>
+    setFolded((f) => {
+      const n = new Set(f)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  const [optionals, setOptionals] = useState(true)
+  const on = (id: string) => active.includes(id)
+  const n = byId[focus]
+
+  return (
+    <div className="flex h-screen flex-col bg-canopy">
+      <Toolbar
+        brand="P.Kt"
+        groups={[
+          {
+            items: [
+              {
+                glyph: PaletteGlyph,
+                title: showPalette ? 'hide the palette' : 'show the palette',
+                on: showPalette,
+                onClick: () => setShowPalette(!showPalette),
+              },
+            ],
+          },
+          {
+            items: [
+              { glyph: '\u229e', title: 'group the selection' },
+              { glyph: '\u25bd', title: 'fork here' },
+              {
+                glyph: '\u25c7',
+                title: optionals ? 'optionals: on the road' : 'optionals: bypassed',
+                on: optionals,
+                onClick: () => setOptionals(!optionals),
+              },
+            ],
+          },
+          {
+            items: [
+              { glyph: '\u21b6', title: 'undo' },
+              { glyph: '\u21b7', title: 'redo', disabled: true },
+              { glyph: '\u22ef', title: 'actions' },
+            ],
+          },
+          {
+            items: [
+              {
+                glyph: '\u2726',
+                title: 'teach me this',
+                tone: 'primary',
+                disabled: n.kind !== 'topic',
+                onClick: () => startWalk(WALKS[0].id, 0),
+              },
+              {
+                glyph: '\u25b6',
+                title: walk ? 'stop walking' : 'walk this',
+                tone: 'walk',
+                on: !!walk,
+                onClick: () => (walk ? setWalk(null) : startWalk(WALKS[1].id, 0)),
+              },
+            ],
+          },
+        ]}
+        motif={<LeafMark base={props.assetBase || '.'} size={96} tipOnRule />}
+      />
+
+      <div className="flex min-h-0 flex-1 gap-3 p-3">
+        {showPalette ? (
+          <aside className="relative flex w-[var(--sidebar-w)] shrink-0 flex-col overflow-visible rounded-lg border border-frame bg-paper">
+            <PaneHeader title="palette" onClose={() => setShowPalette(false)} />
+            <div className="mb-3 min-h-0 flex-1 overflow-auto">
+              <div className="border-b border-hair p-3 pt-2">
+                <SectionLabel>presets</SectionLabel>
+                <div className="flex flex-col gap-15">
+                  {PRESETS.map((p) => (
+                    <PresetButton
+                      key={p.id}
+                      label={p.label}
+                      hint={p.hint}
+                      active={presetId === p.id}
+                      onClick={() => {
+                        setActive(p.active)
+                        setPresetId(p.id)
+                      }}
+                    />
+                  ))}
+                  {custom.map((p) => (
+                    <PresetButton
+                      key={p.id}
+                      label={p.label}
+                      hint={p.hint}
+                      active={presetId === p.id}
+                      onClick={() => {
+                        setActive(p.active)
+                        setPresetId(p.id)
+                      }}
+                      onDelete={() => {
+                        setCustom((c) => c.filter((x) => x.id !== p.id))
+                        if (presetId === p.id) setPresetId(null)
+                      }}
+                    />
+                  ))}
+                  {draft ? (
+                    <div
+                      ref={draftRef}
+                      className="rounded-md border border-moss-300 bg-primary-wash px-3 py-2"
+                      onBlur={(e) => {
+                        if (!draftRef.current || !draftRef.current.contains(e.relatedTarget as Node)) commitDraft()
+                      }}
+                    >
+                      <input
+                        ref={nameRef}
+                        value={draft.label}
+                        autoFocus
+                        placeholder="preset name"
+                        onChange={(e) => setDraft((d) => ({ ...d!, label: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitDraft()
+                          if (e.key === 'Escape') setDraft(null)
+                        }}
+                        className="box-border w-full rounded-xs border border-moss-300 bg-raised px-[7px] py-05 font-ui text-body font-semibold text-ink-1 outline-none"
+                      />
+                      <input
+                        value={draft.hint}
+                        placeholder="what this composition is for"
+                        onChange={(e) => setDraft((d) => ({ ...d!, hint: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitDraft()
+                          if (e.key === 'Escape') setDraft(null)
+                        }}
+                        className="mt-1 box-border w-full rounded-xs border border-rule bg-raised px-[7px] py-05 font-ui text-caption font-medium text-ink-2 outline-none"
+                      />
+                      <div className="mt-[7px] flex gap-15">
+                        <PillButton size="sm" tone="primary" onClick={commitDraft}>
+                          save
+                        </PillButton>
+                        <PillButton
+                          size="sm"
+                          tone="ghost"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setDraft(null)}
+                        >
+                          cancel
+                        </PillButton>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex-1 p-3">
+                <SectionLabel
+                  action={
+                    <PillButton
+                      size="sm"
+                      disabled={!active.length}
+                      title="save the current composition"
+                      onClick={() =>
+                        setDraft({
+                          id: 'custom-' + Date.now(),
+                          label: 'Custom preset' + (custom.length ? ' ' + (custom.length + 1) : ''),
+                          hint: active
+                            .map((id) => INSTRUMENTS.find((x) => x.id === id)!.label.toLowerCase())
+                            .join(' + '),
+                          active: active.slice(),
+                        })
+                      }
+                    >
+                      custom preset
+                    </PillButton>
+                  }
+                >
+                  instruments
+                </SectionLabel>
+                <div className="flex flex-col gap-05">
+                  {FAMILIES.map((f) => (
+                    <InstrumentGroup
+                      key={f.id}
+                      label={f.label}
+                      open={!folded.has(f.id)}
+                      onToggle={() => fold(f.id)}
+                      labelWidth={FAMILY_COL}
+                      count={f.items.filter((i) => on(i.id)).length}
+                    >
+                      {f.items.map((i) => (
+                        <InstrumentRow
+                          key={i.id}
+                          label={i.label}
+                          on={on(i.id)}
+                          swatch={(i as any).swatch}
+                          disabled={(i as any).soon}
+                          onClick={(i as any).soon ? undefined : () => toggle(i.id)}
+                        />
+                      ))}
+                    </InstrumentGroup>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </aside>
+        ) : null}
+
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="flex min-h-0 flex-1 gap-3">
+            {active.length === 0 ? (
+              <div className="grid flex-1 place-items-center text-body text-ink-3">
+                no instruments in the composition — pick one on the left
+              </div>
+            ) : (
+              active.map((id) => {
+                const inst = INSTRUMENTS.find((x) => x.id === id)!
+                const wrap = (el: React.ReactNode) => (
+                  <div
+                    key={id}
+                    className={cx('flex min-w-0', inst.flex ? '' : 'basis-[var(--tree-w)] flex-none')}
+                    style={inst.flex ? { flex: inst.flex + ' 1 0%' } : undefined}
+                  >
+                    {el}
+                  </div>
+                )
+                const paneProps = { onClose: () => toggle(id) }
+                if (id === 'nested') return wrap(<MapPane focus={focus} onFocus={go} {...paneProps} />)
+                if (id === 'tree') return wrap(<TreePane focus={focus} onFocus={go} {...paneProps} />)
+                if (id === 'children') return wrap(<ConnectionsPane focus={focus} onFocus={go} {...paneProps} />)
+                return wrap(<DocPane focus={focus} onFocus={go} onStartWalk={startWalk} {...paneProps} />)
+              })
+            )}
+          </div>
+          {showTrail ? (
+            <TrailBar
+              trail={trail}
+              onFocus={go}
+              walk={walk}
+              cursor={cursor}
+              onStartWalk={startWalk}
+              onAdvance={advance}
+              onStop={() => setWalk(null)}
+              onJump={jumpTo}
+              onReset={() => {
+                setTrail([{ id: focus, via: 'NAV' }])
+                setWalk(null)
+              }}
+              onClose={() => setShowTrail(false)}
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}

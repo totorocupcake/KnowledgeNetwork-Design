@@ -1,0 +1,318 @@
+import { Fragment, useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import type { NodeChipProps } from '../contracts'
+import { WASH, cx } from '../wash'
+
+const DOMAIN = {
+  sys: 'var(--domain-sys)',
+  math: 'var(--domain-math)',
+  cs: 'var(--domain-cs)',
+  net: 'var(--domain-net)',
+  sec: 'var(--domain-sec)',
+  se: 'var(--domain-se)',
+} as const
+
+/** A corpus node as a chip: dot, truncating title, raised on paper. The face stays
+ *  white so elevation reads. `index` is the node's step number in its container
+ *  ("2.1") — derived, never part of the name, so it is set in mono beside the title
+ *  rather than inside it.
+ *
+ *  `mark` chooses which of the two sanctioned carriers of domain colour this chip
+ *  uses — the system allows border, dot and title, never the face:
+ *    'dot'    (default) a 7px disc, grey `--border-rule` around it. The dense form:
+ *             a trail, a legend, a rail, anywhere chips repeat down a list and 2px
+ *             of hue per row would be more colour than content.
+ *    'border' `--stroke-rule` (1.5px) in the domain hue and no disc. The form for a
+ *             node standing on its own — a stop inside a group, a node on the road —
+ *             where the chip is big enough for the border to read as identity and
+ *             the freed column lets the step number sit first.
+ *             1.5px, not the road node's `--stroke-node` 2px: that stroke is drawn
+ *             on a 34px node standing on a pane, while a chip is half that tall and
+ *             sits INSIDE a group whose own edge is nothing but a tint. At 2px the
+ *             children were the loudest thing in the well and the group read as
+ *             their background — a head is never lighter than its children.
+ *
+ *  This component keeps most of its geometry as an inline style, and that is the
+ *  correct port: every measurement here is either a runtime drag result or a
+ *  min-content/fit-content floor with a comment explaining why it must beat an
+ *  explicit width. Tailwind carries the theme (ink, face, weight, wash); the boxes
+ *  stay numeric. */
+
+/** The recede clock, shared with the scrollbar and a pane's ✕ (window.PKT_SB.LEAVE):
+ *  a control that has appeared waits out the same grace period before it goes, so it
+ *  never vanishes under the cursor's heels and every ✕ in the product recedes on one
+ *  clock rather than each on its own. */
+function useRecede() {
+  const [shown, setShown] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  const show = () => {
+    if (timer.current) clearTimeout(timer.current)
+    setShown(true)
+  }
+  const hide = () => {
+    if (timer.current) clearTimeout(timer.current)
+    const LEAVE = (window as any).PKT_SB?.LEAVE || 500
+    timer.current = setTimeout(() => setShown(false), LEAVE)
+  }
+  return [shown, show, hide] as const
+}
+
+type Size = { w: number | null; h: number | null }
+
+/** Size by drag, on the chip's own edges — the same act as a VersionedGroup's edges
+ *  and the same withdrawal: double-click an edge and that dimension goes back to
+ *  automatic, the chip sizing itself from its text and its container again. Right
+ *  edge for width, bottom for height, corner for both. Height is worth having even
+ *  though a chip's text sets its natural height: a chip in a chain is a box among
+ *  boxes, and a row of boxes the reader has evened up by hand should stay evened up.
+ *  The strips stop propagation, so a chip inside a NodeChain is resized rather than
+ *  dragged to a new slot. */
+function useSizeDrag(
+  ref: React.RefObject<HTMLElement | null>,
+  bounds: { minW: number; maxW: number; minH: number; maxH: number },
+) {
+  const [size, setSize] = useState<Size | null>(null)
+  const start = (axis: 'x' | 'y' | 'both') => (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const box = ref.current && ref.current.getBoundingClientRect()
+    if (!box) return
+    const node = e.currentTarget as HTMLElement
+    const from = { x: e.clientX, y: e.clientY, w: box.width, h: box.height }
+    let last: Size = {
+      w: (size && size.w) || Math.round(box.width),
+      h: (size && size.h) || Math.round(box.height),
+    }
+    try {
+      node.setPointerCapture(e.pointerId)
+    } catch { /* older pointer impls */ }
+    const move = (ev: PointerEvent) => {
+      const w =
+        axis === 'y'
+          ? last.w
+          : Math.round(Math.max(bounds.minW, Math.min(bounds.maxW, from.w + (ev.clientX - from.x))))
+      const h =
+        axis === 'x'
+          ? last.h
+          : Math.round(Math.max(bounds.minH, Math.min(bounds.maxH, from.h + (ev.clientY - from.y))))
+      last = { w, h }
+      setSize(last)
+    }
+    const up = () => {
+      node.removeEventListener('pointermove', move)
+      node.removeEventListener('pointerup', up)
+      node.removeEventListener('pointercancel', up)
+    }
+    node.addEventListener('pointermove', move)
+    node.addEventListener('pointerup', up)
+    node.addEventListener('pointercancel', up)
+  }
+  const reset = (axis: 'x' | 'y' | 'both') => (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSize((s) => {
+      if (!s) return null
+      const next: Size = { w: axis === 'y' ? s.w : null, h: axis === 'x' ? s.h : null }
+      return !next.w && !next.h ? null : next
+    })
+  }
+  return [size, start, reset, setSize] as const
+}
+
+export function NodeChip({
+  title,
+  index,
+  domain,
+  mark = 'dot',
+  dim,
+  lit,
+  note,
+  wrap,
+  onClick,
+  onDelete,
+  resizable = true,
+  minWidth = 120,
+  maxWidth = 520,
+  minHeight = 28,
+  maxHeight = 320,
+}: NodeChipProps) {
+  const hue = (DOMAIN as any)[domain as string] || 'var(--swatch-anchor-fallback)'
+  const bordered = mark === 'border'
+  const [hot, showX, hideX] = useRecede()
+  const shell = useRef<HTMLSpanElement>(null)
+  const [size, startSize, resetSize, setSizeFromLayout] = useSizeDrag(shell, {
+    minW: minWidth,
+    maxW: maxWidth,
+    minH: minHeight,
+    maxH: maxHeight,
+  })
+  /* the floor is enforced in layout, so a drag past it leaves the state below the
+     box's real size — which makes the next drag jump. Read the settled size back. */
+  useEffect(() => {
+    const el = shell.current
+    if (!el || !size) return
+    const w = size.w ? Math.max(size.w, Math.round(el.offsetWidth)) : size.w
+    const h = size.h ? Math.max(size.h, Math.round(el.offsetHeight)) : size.h
+    // a 1px tolerance: sub-pixel layout must not start a feedback loop
+    if (Math.abs((w || 0) - (size.w || 0)) > 1 || Math.abs((h || 0) - (size.h || 0)) > 1) {
+      setSizeFromLayout({ w, h })
+    }
+  })
+
+  const geometry: CSSProperties = {
+    /* a hand-set height centres its content: the extra room is deliberate, and
+       text pinned to the top of it looks like a layout accident instead */
+    alignItems: size && size.h ? 'center' : wrap ? 'flex-start' : 'center',
+    width: (size && size.w) || undefined,
+    height: (size && size.h) || undefined,
+    /* THE TEXT IS THE FLOOR. min-content / fit-content beat an explicit width and
+       height in CSS, so a drag cannot make the chip smaller than the name it
+       carries — the box stops instead of the words disappearing. Clipping was
+       tried and it is the wrong answer: a node whose name you cannot read is not
+       a node any more. */
+    minWidth: 'min-content',
+    minHeight: 'fit-content',
+    /* 100% until the user says otherwise: a chip fits its container by default,
+       but a width set by drag WINS — a ceiling the user has already answered is
+       not a ceiling, and a chip that refused to grow past its column read as a
+       broken handle rather than a rule. */
+    maxWidth: size && size.w ? 'none' : '100%',
+    border: bordered
+      ? 'var(--stroke-rule) solid ' + (dim ? 'var(--border-hair)' : hue)
+      : '1px solid ' + (dim ? 'var(--border-hair)' : 'var(--border-rule)'),
+    boxShadow: lit ? 'var(--ring-linked), var(--lift-1)' : dim ? 'none' : 'var(--lift-1)',
+  }
+
+  return (
+    <span
+      ref={shell}
+      title={note || title}
+      onClick={onClick}
+      onMouseEnter={showX}
+      onMouseLeave={hideX}
+      onFocus={showX}
+      onBlur={hideX}
+      className={cx(
+        /* border-box, and it is load-bearing: with the default content-box an explicit
+           width set the CONTENT width, so offsetWidth came back padding+border larger,
+           the layout-correction effect below read that as "the box settled bigger",
+           wrote it into state, and the chip grew on every frame of a drag. */
+        'relative box-border inline-flex gap-15 overflow-hidden font-ui text-body font-semibold',
+        /* no selection: a chip is dragged by its body — in a chain to reorder it, by
+           its edges to size it — and a drag that paints a text selection instead reads
+           as a failed drag. The tooltip and the field carry the full text anyway. */
+        'select-none',
+        bordered ? (wrap ? 'px-[11px] py-1' : 'px-3 py-[3px]') : 'py-1 pr-[11px] pl-[9px]',
+        wrap ? 'rounded-md leading-snug' : 'rounded-full',
+        /* hidden still, but nothing should ever reach it: the min-content floor
+           means the box grows rather than the text spilling over its own border. */
+        wrap ? 'whitespace-normal' : 'whitespace-nowrap',
+        dim ? 'bg-transparent text-ink-3 opacity-[var(--opacity-off-path)]' : 'bg-raised text-ink-1',
+        /* 'inherit', not 'default': a chip inside a NodeChain sits on a slot that
+           says move, and a chip that reasserted the plain arrow hid the one
+           affordance the chain provides. A chip that is itself clickable keeps
+           pointer — its own act outranks the chain's. */
+        onClick ? 'cursor-pointer' : 'cursor-[inherit]',
+        WASH,
+      )}
+      style={geometry}
+    >
+      {bordered ? null : (
+        <span
+          className={cx('size-[7px] shrink-0 rounded-full', wrap && 'mt-15')}
+          style={{ background: hue }}
+        />
+      )}
+      {index ? (
+        <span
+          className={cx(
+            'shrink-0 font-mono text-micro font-normal tabular-nums',
+            /* text-micro is the floor for a numeral, so the step number cannot get
+               any smaller than the name beside it; the rest of the drop is ink.
+               text-ink-3 is licensed here by the one clause that allows it — a
+               numeral sitting beside its own value, glanced at rather than read. */
+            'text-ink-3',
+            wrap && 'mt-px',
+            dim && 'opacity-80',
+          )}
+        >
+          {index}
+        </span>
+      ) : null}
+      {/* 'break-word', not 'anywhere': anywhere breaks mid-word at the first
+          opportunity, which on a narrow chip left single letters sitting against the
+          border. Word boundaries first, and only split a word that cannot fit at all. */}
+      <span
+        className={cx(
+          'min-w-0 overflow-hidden',
+          onDelete ? 'flex-1 pr-1' : 'shrink grow-0 basis-auto',
+          wrap ? 'break-words text-clip' : 'text-ellipsis',
+        )}
+      >
+        {title}
+      </span>
+      {resizable ? (
+        <Fragment>
+          <span
+            aria-hidden="true"
+            title={'drag to resize \u00b7 double-click to reset'}
+            onPointerDown={startSize('x')}
+            onDoubleClick={resetSize('x')}
+            className="absolute top-2 right-0 bottom-2 z-2 w-[7px] cursor-ew-resize touch-none bg-transparent"
+          />
+          <span
+            aria-hidden="true"
+            title={'drag to resize \u00b7 double-click to reset'}
+            onPointerDown={startSize('y')}
+            onDoubleClick={resetSize('y')}
+            className="absolute right-[10px] bottom-0 left-[10px] z-2 h-[7px] cursor-ns-resize touch-none bg-transparent"
+          />
+          <span
+            aria-hidden="true"
+            title={'drag to resize \u00b7 double-click to reset'}
+            onPointerDown={startSize('both')}
+            onDoubleClick={resetSize('both')}
+            className="absolute right-0 bottom-0 z-3 size-[11px] cursor-nwse-resize touch-none bg-transparent"
+          />
+        </Fragment>
+      ) : null}
+      {/* Deleting a node is destructive, so the control is BERRY AT REST, not berry
+          on hover: hover in this system is a one-step wash of the element's own
+          family and never a hue change, so the hue has to be the control's own
+          identity. It is only visible while the chip is hovered or focused anyway —
+          the same recede every ✕ in the system does — and it leaves the tab order
+          while hidden, since an opacity-0 button still answers Enter.
+
+          It also sits at the chip's TRAILING EDGE (ml-auto), not after the title:
+          pinned to the text it moved with every name, so the same control landed
+          somewhere different on every chip in a list. */}
+      {onDelete ? (
+        <button
+          type="button"
+          title="delete this node"
+          aria-label="delete this node"
+          tabIndex={hot ? 0 : -1}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className={cx(
+            /* the ✕ stays INSIDE the chip's padding box — pulled out to -5 it sat on
+               the border, which read as a control stuck to the edge of the chip */
+            'ml-auto -mr-05 grid size-[18px] shrink-0 place-items-center rounded-full border border-transparent bg-transparent p-0',
+            'box-border cursor-pointer font-ui text-[10px] leading-none text-danger',
+            'hover:border-danger hover:bg-danger-wash hover:text-berry-600',
+            hot ? 'opacity-100' : 'pointer-events-none opacity-0',
+            wrap ? 'mt-px self-start' : 'self-center',
+            'transition-opacity duration-[var(--dur-fade)] ease-soft',
+            WASH,
+          )}
+        >
+          {'\u2715'}
+        </button>
+      ) : null}
+    </span>
+  )
+}

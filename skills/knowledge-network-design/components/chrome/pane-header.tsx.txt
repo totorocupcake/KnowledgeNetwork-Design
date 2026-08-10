@@ -1,0 +1,140 @@
+import { useEffect, useRef, useState } from 'react'
+import type { PaneHeaderProps } from '../contracts'
+import { WASH, cx } from '../wash'
+
+/** Every instrument pane wears the same hat: just its title, sitting ON the
+ *  pane's own hairline border like a legend — the border is the frame and the
+ *  title is part of it. A pane carries NO subtitle or description line.
+ *  `variant="bar"` is the older filled title row.
+ *
+ *  The legend variant is the one place in the system where inline styles are
+ *  unavoidable: the mask strip that interrupts the frame must be painted in
+ *  whatever colour sits BEHIND the pane, which the consumer passes at runtime
+ *  (`legendBg`), and the 2px strip is positioned off the border's own centre
+ *  line. Those two are geometry against a runtime value, not theme. */
+export function PaneHeader({
+  title,
+  glyph,
+  onClose,
+  actions,
+  variant = 'legend',
+  legendBg = 'var(--surface-canopy)',
+}: PaneHeaderProps) {
+  /* The ✕ keeps the scrollbar's manners: absent while the pane is at rest,
+     present the moment the pointer (or the keyboard) is inside it. Its notch in
+     the frame fades WITH it, so a dormant pane wears an unbroken border rather
+     than a hole where a control used to be. */
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [live, setLive] = useState(false)
+  useEffect(() => {
+    const pane = rootRef.current && rootRef.current.parentElement
+    if (!pane) return
+    let t: ReturnType<typeof setTimeout>
+    /* same grace period as the scrollbar, read from the script that owns it, so
+       the ✕ and the bar recede together rather than on two different clocks */
+    const LEAVE = (window as any).PKT_SB?.LEAVE || 500
+    const on = () => {
+      clearTimeout(t)
+      setLive(true)
+    }
+    const off = () => {
+      clearTimeout(t)
+      t = setTimeout(() => setLive(false), LEAVE)
+    }
+    pane.addEventListener('pointerenter', on)
+    pane.addEventListener('pointerleave', off)
+    pane.addEventListener('focusin', on)
+    pane.addEventListener('focusout', off)
+    return () => {
+      clearTimeout(t)
+      pane.removeEventListener('pointerenter', on)
+      pane.removeEventListener('pointerleave', off)
+      pane.removeEventListener('focusin', on)
+      pane.removeEventListener('focusout', off)
+    }
+  }, [])
+
+  const iconBtn = (box: 18 | 24) =>
+    cx(
+      'grid place-items-center rounded-full border border-transparent bg-transparent p-0 leading-none',
+      'cursor-pointer text-ink-2 hover:border-rule hover:bg-hover hover:text-ink-1',
+      box === 18 ? 'size-[18px] text-[10px]' : 'size-6 text-[13px]',
+      WASH,
+    )
+
+  if (variant === 'legend') {
+    /* The title is transparent: only the 1px border LINE is masked behind it, so
+       the frame reads as interrupted rather than as a filled chip sitting on it.
+       The row is inset by the pane's corner radius on the trailing side so the
+       ✕'s notch stops where the corner arc begins — a straight 2px mask cannot
+       erase a curve, so a notch that reaches into the arc leaves a stub of border
+       beside the button. That inset is the hard limit on how far right the ✕ can
+       sit; it is pushed out the last 2px by unbalancing its own padding, and the
+       notch's left edge moves with it so the gap in the frame stays even on both
+       sides of the button rather than trailing off to its left. */
+    const cut: React.CSSProperties = {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 'calc(50% - 1px)',
+      height: 2,
+      background: legendBg,
+      zIndex: 0,
+    }
+    return (
+      <div ref={rootRef} className="relative h-[11px] shrink-0">
+        <div className="pointer-events-none absolute top-0 right-5 left-4 z-2 flex -translate-y-1/2 items-center gap-2">
+          <span className="pointer-events-auto relative inline-flex min-w-0 items-baseline px-[5px]">
+            <span style={cut} />
+            <span className="relative z-1 -translate-y-px shrink-0 whitespace-nowrap font-display text-title font-semibold text-ink-1">
+              {glyph ? glyph + ' ' : ''}
+              {title}
+            </span>
+          </span>
+          <span className="flex-1" />
+          {actions ? (
+            <span className="pointer-events-auto relative inline-flex items-center gap-15 px-[7px]">
+              <span style={cut} />
+              <span className="relative z-1 inline-flex max-h-[18px] items-center gap-15 overflow-hidden">{actions}</span>
+            </span>
+          ) : null}
+          {onClose ? (
+            <span
+              className={cx(
+                'relative inline-flex shrink-0 pr-px pl-[5px] transition-opacity duration-[var(--dur-hover)] ease-soft',
+                live ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+              )}
+            >
+              <span style={{ ...cut, left: 4 }} />
+              <button
+                type="button"
+                onClick={onClose}
+                title="close"
+                tabIndex={live ? 0 : -1}
+                className={cx('relative z-1', iconBtn(18))}
+              >
+                {'\u2715'}
+              </button>
+            </span>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <header className="flex min-h-[var(--pane-header-h)] shrink-0 items-center gap-2 rounded-t-lg border-b border-hair bg-paper px-[var(--pane-pad-x)] py-[7px]">
+      <span className="shrink-0 whitespace-nowrap font-display text-title font-bold text-ink-1">
+        {glyph ? glyph + ' ' : ''}
+        {title}
+      </span>
+      <span className="flex-1" />
+      {actions}
+      {onClose ? (
+        <button type="button" onClick={onClose} title="close" className={iconBtn(24)}>
+          {'\u2715'}
+        </button>
+      ) : null}
+    </header>
+  )
+}

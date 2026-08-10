@@ -1,0 +1,14 @@
+import type { DomainDotProps } from '../contracts'
+import { cx, domainBg } from '../wash'
+
+/** A node's domain, as a dot. The smallest unit of identity in the whole system.
+ *  `ring` puts a 2px paper ring around it so the dot can sit on a coloured face
+ *  without touching it. */
+export function DomainDot({ domain, size = 9, ring }: DomainDotProps) {
+  return (
+    <span
+      className={cx('inline-block shrink-0 rounded-full', domainBg(domain), ring && 'ring-2 ring-raised')}
+      style={{ width: size, height: size }}
+    />
+  )
+}

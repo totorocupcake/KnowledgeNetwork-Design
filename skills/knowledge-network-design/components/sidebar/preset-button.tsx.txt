@@ -1,0 +1,48 @@
+import type { PresetButtonProps } from '../contracts'
+import { WASH, cx } from '../wash'
+import { BinMark } from './bin-mark'
+
+/** A curated instrument composition. Active state is a moss wash, never a colour
+ *  swap. A user-saved preset also carries a delete mark in its top-right corner,
+ *  revealed on hover of the card — the `group`/`group-hover` pair is what keeps
+ *  that out of React state. */
+export function PresetButton({ label, hint, active, onClick, onDelete }: PresetButtonProps) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        className={cx(
+          'block w-full cursor-pointer rounded-md border px-3 py-2 text-left font-ui',
+          onDelete ? 'pr-[34px]' : '',
+          active ? 'border-moss-300 bg-primary-wash' : 'border-rule bg-transparent hover:bg-hover',
+          WASH,
+        )}
+      >
+        <div className={cx('text-body', active ? 'font-semibold text-primary-ink' : 'font-medium text-ink-1')}>
+          {label}
+        </div>
+        {hint ? <div className="mt-05 text-caption leading-snug text-ink-3">{hint}</div> : null}
+      </button>
+      {onDelete ? (
+        <button
+          type="button"
+          title={'delete \u201c' + label + '\u201d'}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className={cx(
+            'absolute top-[5px] right-[5px] box-border grid size-5 cursor-pointer place-items-center rounded-full border border-transparent bg-transparent p-0 text-[13px] leading-none text-ink-3',
+            'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+            'hover:border-berry-100 hover:bg-danger-wash hover:text-danger',
+            WASH,
+            'transition-opacity',
+          )}
+        >
+          <BinMark />
+        </button>
+      ) : null}
+    </div>
+  )
+}

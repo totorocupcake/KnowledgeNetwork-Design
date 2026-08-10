@@ -1,0 +1,48 @@
+import type { CSSProperties } from 'react'
+import type { InstrumentRowProps } from '../contracts'
+import { WASH, cx } from '../wash'
+
+/** THE selection bullet. Drawn, not typed, for the same reason as the disclosure
+ *  caret: ● and ○ are wildly different weights in the same face, sit off the text
+ *  baseline, and change size with the font. This is an 8px disc — filled
+ *  `--accent-primary` when the thing is ON, an inset 1.5px `--text-3` ring when it
+ *  is benched — matching DomainDot's diameter so a list can carry both marks in
+ *  one column without them arguing.
+ *
+ *  Use it for any list where a row is IN or OUT of something: instruments in a
+ *  composition, lenses, filters, saved views. It is not a checkbox (no third
+ *  state) and not a radio (rows are independent) — it is a state light. */
+export function bulletStyle(on?: boolean): CSSProperties {
+  return {
+    width: 8,
+    height: 8,
+    flexShrink: 0,
+    borderRadius: 'var(--radius-pill)',
+    background: on ? 'var(--accent-primary)' : 'transparent',
+    boxShadow: on ? 'none' : 'inset 0 0 0 1.5px var(--text-3)',
+    transition: 'var(--transition-wash)',
+  }
+}
+
+/** A pickable instrument. Filled bullet on screen / ring benched. */
+export function InstrumentRow({ label, on, swatch, disabled, onClick }: InstrumentRowProps) {
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={cx(
+        'flex w-full min-h-[var(--hit-min)] items-center gap-2 rounded-sm border-none px-[10px] py-[5px] text-left font-ui text-body text-ink-1',
+        'cursor-pointer disabled:cursor-not-allowed disabled:opacity-[var(--opacity-disabled)]',
+        on ? 'bg-bark-100 font-semibold' : 'bg-transparent font-medium enabled:hover:bg-hover',
+        WASH,
+      )}
+    >
+      <span className="grid w-3 shrink-0 place-items-center">
+        <span style={bulletStyle(on)} />
+      </span>
+      {swatch ? <span className="size-2 shrink-0 rounded-[3px]" style={{ background: swatch }} /> : null}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
+  )
+}

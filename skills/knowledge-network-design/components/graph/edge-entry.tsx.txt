@@ -1,0 +1,145 @@
+import type { EdgeEntryProps } from '../contracts'
+import { cx } from '../wash'
+import { EDGE } from './edge-legend'
+
+const DOMHUE = {
+  sys: 'var(--domain-sys)',
+  math: 'var(--domain-math)',
+  cs: 'var(--domain-cs)',
+  net: 'var(--domain-net)',
+  sec: 'var(--domain-sec)',
+  se: 'var(--domain-se)',
+} as const
+
+/* A node inside an entry wears its domain as a BORDER on paper, not as a dot on a
+   raised chip: an entry sits inside a recessed well, and raised means a node
+   standing on a pane. break-word is the last resort — words wrap at spaces first —
+   because a name whose min-content is wider than the well pushes its border out
+   past the pane edge.
+
+   A path deeper than one step is ELIDED, not wrapped: the node column is a third of
+   a pane at best, and "Networking / Protocol Stack / TCP & UDP" set inline there hits
+   break-word and comes apart mid-word — five stacked fragments in a pill five times
+   the height of the connector beside it. The segment that earns its place is the
+   FIRST: it is the focus node, the same bold name every row in the list opens on. The
+   middle is what the reader already knows from having navigated there, so it goes to
+   an ellipsis, and the whole path stays in the tooltip.
+
+   The border colour is a runtime domain lookup, so it stays an inline style: a
+   Tailwind class cannot be generated for a value chosen per instance. */
+function EntryNode({
+  title,
+  domain,
+  anchor,
+  within,
+  onClick,
+}: {
+  title: string
+  domain?: string
+  anchor?: boolean
+  within?: string
+  onClick?: () => void
+}) {
+  const segs = within ? String(within).split(' / ') : []
+  const lead = segs.length > 1 ? segs[0] + ' / \u2026' : within
+  return (
+    <span
+      onClick={onClick}
+      title={segs.length ? segs.join(' / ') + ' / ' + title : title}
+      className={cx(
+        'inline-flex min-w-0 max-w-full items-center rounded-md border bg-transparent px-[9px] py-05',
+        onClick ? 'cursor-pointer' : 'cursor-[inherit]',
+      )}
+      style={{ borderColor: (DOMHUE as any)[domain as string] || 'var(--swatch-anchor-fallback)' }}
+    >
+      {/* Whichever way the end was reached, the ANCHOR is what carries the emphasis:
+          direct, that is the node itself; through a descendant, it is the ancestry
+          prefix, in the system's slash grammar (DocHeader), with the child that
+          actually holds the link set beside it at ordinary weight. So every entry in
+          a list opens on the same bold name — the one at the head of the rail — and
+          the eye reads down the column instead of re-parsing each row. */}
+      <span
+        className={cx(
+          'min-w-0 break-words text-center font-ui text-caption leading-snug',
+          anchor && !within ? 'font-bold text-ink-1' : 'font-medium text-ink-2',
+        )}
+      >
+        {within ? (
+          <span className={cx(anchor ? 'font-bold text-ink-1' : 'font-medium text-ink-3')}>
+            {lead}
+            {' / '}
+          </span>
+        ) : null}
+        {title}
+      </span>
+    </span>
+  )
+}
+
+/** One relationship, drawn: two nodes and the typed edge between them. */
+export function EdgeEntry({
+  from,
+  fromDomain,
+  fromAnchor,
+  fromWithin,
+  to,
+  toDomain,
+  toAnchor,
+  toWithin,
+  type,
+  relation,
+  color,
+  direction = 'out',
+  onFrom,
+  onTo,
+  connectorWidth = 96,
+}: EdgeEntryProps) {
+  const spec = (EDGE as any)[type as string] || {}
+  const hue = color || spec.color || 'var(--border-rule)'
+  const label = relation !== undefined ? relation : spec.label
+  return (
+    <div className="flex min-w-0 items-center pt-[14px] pb-[10px]">
+      <span className="flex min-w-0 flex-1 justify-end">
+        <EntryNode title={from} domain={fromDomain} anchor={fromAnchor} within={fromWithin} onClick={onFrom} />
+      </span>
+      {/* The connector takes its room FIRST — it carries the string the entry
+          exists for — and the two nodes share what is left. The line is this
+          column's only in-flow child, so it lands on the row's centre line
+          whatever height the names wrap to; the label floats above it, closer to
+          its own line than to the entry above, so a wrapped name is never
+          orphaned between two connectors. Clearance is MARGIN, not padding:
+          padding lives inside the box, so a label wider than its column still
+          ran over the node beside it. */}
+      <span
+        className="relative mx-[3px] flex min-w-16 shrink items-center self-center"
+        style={{ flexBasis: connectorWidth, flexGrow: 0 }}
+      >
+        <span className="absolute bottom-full left-0 box-border w-full break-words pb-px text-center font-ui text-body font-semibold leading-snug text-ink-1">
+          {label}
+        </span>
+        {/* the head goes on the end that RECEIVES */}
+        <span className="flex w-full items-center leading-[0.7]" style={{ color: hue }}>
+          {direction !== 'out' ? <span className="flex-none text-[9px]">{'\u25c0'}</span> : null}
+          {/* the shaft is SVG with crispEdges, never a 3px CSS box — EdgeDash's rule.
+              Down a list the line boxes above each entry are fractional, so a CSS bar
+              lands on a different subpixel offset in every row and some antialias
+              across four device rows, reading visibly thicker than their neighbours.
+              crispEdges snaps every shaft to the same device-pixel height. */}
+          <svg
+            height="3"
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            className="block min-w-0 flex-1"
+            aria-hidden="true"
+          >
+            <rect width="100%" height="3" fill={hue} />
+          </svg>
+          {direction !== 'in' ? <span className="flex-none text-[9px]">{'\u25b6'}</span> : null}
+        </span>
+      </span>
+      <span className="flex min-w-0 flex-1 justify-start">
+        <EntryNode title={to} domain={toDomain} anchor={toAnchor} within={toWithin} onClick={onTo} />
+      </span>
+    </div>
+  )
+}

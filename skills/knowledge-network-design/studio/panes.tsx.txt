@@ -1,0 +1,665 @@
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { DOMAINS, byId, edges, WALKS, EDGE_LABEL, edgesTouching, pathTo } from './corpus'
+import type { EdgeType, KnEdge } from './corpus'
+import { cx } from '../components/wash'
+import { DomainDot } from '../components/graph/domain-dot'
+import { NodeChip } from '../components/graph/node-chip'
+import { EdgeEntry } from '../components/graph/edge-entry'
+import { TreeRow } from '../components/nav/tree-row'
+import { TrailChip } from '../components/nav/trail-chip'
+import { StepDot } from '../components/nav/step-dot'
+import { WalkCard } from '../components/nav/walk-card'
+import { PaneHeader } from '../components/chrome/pane-header'
+import { PillButton } from '../components/chrome/pill-button'
+import { DocHeader } from '../components/doc/doc-header'
+import { SectionLabel } from '../components/doc/section-label'
+
+const DOMHUE: Record<string, string> = {
+  sys: 'var(--domain-sys)',
+  math: 'var(--domain-math)',
+  cs: 'var(--domain-cs)',
+  net: 'var(--domain-net)',
+  sec: 'var(--domain-sec)',
+  se: 'var(--domain-se)',
+}
+const EDGEHUE: Record<string, string> = {
+  depends_on: 'var(--edge-depends-on)',
+  uses: 'var(--edge-uses)',
+  see_also: 'var(--edge-see-also)',
+  implemented_with: 'var(--edge-implemented-with)',
+}
+
+/** EVERY INSTRUMENT PANE IS THIS BOX. Paper face, `border-frame` hairline,
+ *  `rounded-lg`, and it grows in both directions from `min-w-0 min-h-0` so a long
+ *  name inside can never push the pane wider than its share. `overflow-visible` is
+ *  deliberate: PaneHeader's legend sits ON the top border and would be clipped by a
+ *  hidden overflow. */
+export const PANE = 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible rounded-lg border border-frame bg-paper'
+
+/** THE SCROLLER INSIDE A PANE. `mb-3` holds the scroller — and so the scrollbar's
+ *  bottom arrow — clear of the pane's `rounded-lg` corner. The pane's own paper
+ *  fills the strip. */
+export const PANE_BODY = 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto mb-3'
+
+type Via = string
+export type Go = (id: string, via?: Via, jump?: boolean) => void
+interface PaneProps {
+  focus: string
+  onFocus: Go
+  onClose: () => void
+}
+
+/* ── Map — the nested atlas, read as territory: a domain contains modules,
+      a module contains topics. Containment is depth: a group is a WELL. ── */
+export function MapPane({ focus, onFocus, onClose }: PaneProps) {
+  return (
+    <section className={PANE} data-screen-label="map">
+      <PaneHeader title="map" onClose={onClose} />
+      <div className={cx(PANE_BODY, 'p-3 pt-4')}>
+        <div className="flex flex-col gap-3">
+          {DOMAINS.map((d) => (
+            <div key={d.id} className="rounded-lg bg-sunken p-3 shadow-[var(--sink-1)]">
+              <div className="mb-2 flex items-center gap-[7px]">
+                <DomainDot domain={d.id} size={10} />
+                <span className="font-display text-body font-bold text-ink-1">{d.title}</span>
+              </div>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2">
+                {d.modules.map((m) => (
+                  <div key={m.id} className="min-w-0 rounded-md bg-sunken-2 px-[10px] py-2 shadow-[var(--sink-1)]">
+                    <div className="mb-[7px] font-display text-caption font-bold text-ink-1">{m.title}</div>
+                    <div className="flex flex-col items-start gap-[5px]">
+                      {m.topicIds.map((id) => (
+                        <span
+                          key={id}
+                          className={cx('flex max-w-full rounded-md', focus === id && 'shadow-ring-selected')}
+                        >
+                          <NodeChip title={byId[id].title} domain={d.id} wrap onClick={() => onFocus(id, 'MAP')} />
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ── Tree — the same corpus as a literal indented list ─────────────────── */
+export function TreePane({ focus, onFocus, onClose }: PaneProps) {
+  const [open, setOpen] = useState(() => new Set(['net', 'stk']))
+  const toggle = (id: string) =>
+    setOpen((prev) => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  return (
+    <section className={cx(PANE, 'flex-none basis-[var(--tree-w)]')} data-screen-label="tree">
+      <PaneHeader title="tree" onClose={onClose} />
+      <div className={cx(PANE_BODY, 'pt-3 pb-15')}>
+        {DOMAINS.map((d) => (
+          <Fragment key={d.id}>
+            <TreeRow
+              title={d.title}
+              domain={d.id}
+              container
+              expanded={open.has(d.id)}
+              current={focus === d.id}
+              onToggle={() => toggle(d.id)}
+              onSelect={() => onFocus(d.id, 'TREE')}
+            />
+            {open.has(d.id) &&
+              d.modules.map((m) => (
+                <Fragment key={m.id}>
+                  <TreeRow
+                    title={m.title}
+                    domain={d.id}
+                    depth={1}
+                    container
+                    expanded={open.has(m.id)}
+                    current={focus === m.id}
+                    onToggle={() => toggle(m.id)}
+                    onSelect={() => onFocus(m.id, 'TREE')}
+                  />
+                  {open.has(m.id) &&
+                    m.topicIds.map((id) => (
+                      <TreeRow
+                        key={id}
+                        title={byId[id].title}
+                        domain={d.id}
+                        depth={2}
+                        current={focus === id}
+                        linkCount={edgesTouching(id).length}
+                        onSelect={() => onFocus(id, 'TREE')}
+                      />
+                    ))}
+                </Fragment>
+              ))}
+          </Fragment>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ── Connections — the neighbourhood as a RAILROAD: the focus at the head of a
+      rail, every neighbour hanging off it as a stop, and the rung carrying the
+      one number that matters at rest — how many relationships run between the
+      two. It scales in the only direction a pane can afford to grow: a hundred
+      neighbours is a longer rail, not a denser one, and nothing overlaps at any
+      count because nothing shares a row.
+      Opening a stop lists its relationships in full, split into the ones
+      authored on the focus itself and the ones it inherits through its
+      children — "this depends on X" and "something inside this depends on X"
+      are different claims. ──────────────────────────────────────────────── */
+const RAIL_X = 26
+const RUNG = 22
+/* a relation the corpus authors as symmetric (its own comments mark see_also ⇄)
+   points both ways, whichever way round the single authored edge runs —
+   direction there is an artifact of authoring order, not a claim the data makes */
+const SYMMETRIC: Partial<Record<EdgeType, boolean>> = { see_also: true }
+
+/* the focus's own subtree — itself, plus every node beneath it. A container holds
+   no typed links of its own: the corpus authors links between topics, and a module
+   is a container of topics. Rolling its children's links up is the only way a
+   container has a neighbourhood at all, and it is a true reading of one — "something
+   inside Protocol Stack builds on Public-Key Cryptography" is a claim about the
+   module. Which child carries it is what the entry has to say, or the reader cannot
+   tell why the link is filed there. */
+function subtree(focus: string) {
+  const mine = new Set([focus])
+  for (const id of Object.keys(byId)) {
+    for (let cur = byId[id]; cur && cur.parent; cur = byId[cur.parent]) {
+      if (cur.parent === focus) {
+        mine.add(id)
+        break
+      }
+    }
+  }
+  return mine
+}
+/* an edge belongs to the rail when it crosses the subtree's boundary — exactly one
+   end inside. Both ends inside is internal wiring, and drawing it would put the
+   focus on both ends of its own entry. For a topic the subtree is just itself, so
+   this is the same set as before. */
+function roadsFor(mine: Set<string>) {
+  return edges.filter((e) => mine.has(e.source) !== mine.has(e.target))
+}
+
+/* the ancestry from the focus down to — but not including — the node that holds the
+   link. Two levels down it has to say both: a domain focus reading "Networking / TCP
+   & UDP" silently drops the module the topic actually sits in. */
+function pathFrom(focus: string, id: string) {
+  const out: string[] = []
+  for (let cur = byId[id]; cur && cur.id !== focus; cur = byId[cur.parent as string]) out.unshift(cur.title)
+  out.unshift(byId[focus].title)
+  out.pop()
+  return out.join(' / ')
+}
+
+type Link = { type: EdgeType; dir: 'in' | 'out' | 'both'; via: string | null }
+type StopData = { id: string; direct: Link[]; via: Link[]; n: number }
+
+function neighbourhood(focus: string, roads: KnEdge[], mine: Set<string>): StopData[] {
+  const m: Record<string, StopData> = {}
+  for (const e of roads) {
+    const out = mine.has(e.source)
+    const id = out ? e.target : e.source
+    const near = out ? e.source : e.target
+    const s = (m[id] = m[id] || { id, direct: [], via: [], n: 0 })
+    const dir = SYMMETRIC[e.type] ? 'both' : out ? 'out' : 'in'
+    /* the id, not the title: the entry prints the full path from the focus down to
+       this node, and only the id can be walked back up */
+    const via = near === focus ? null : near
+    ;(via ? s.via : s.direct).push({ type: e.type, dir: dir as Link['dir'], via })
+  }
+  return Object.keys(m)
+    .map((k) => m[k])
+    .map((s) => Object.assign(s, { n: s.direct.length + s.via.length }))
+    .sort((a, b) => b.n - a.n || byId[a.id].title.localeCompare(byId[b.id].title))
+}
+
+function EntryGroup({
+  title,
+  items,
+  render,
+}: {
+  title: string
+  items: Link[]
+  render: (l: Link, i: number) => React.ReactNode
+}) {
+  if (!items.length) return null
+  return (
+    <div className="flex min-w-0 flex-col gap-05">
+      <div className="flex items-baseline gap-[7px] pb-05">
+        <span className="font-display text-caption font-bold uppercase tracking-caps text-ink-1">{title}</span>
+        <span className="font-mono text-caption tabular-nums text-ink-2">{items.length}</span>
+      </div>
+      {items.map(render)}
+    </div>
+  )
+}
+
+/* the house disclosure mark, the same one TreeRow draws (caretStyle): a square
+   wearing two 1.5px borders, rotated. NOT an SVG chevron — the system's icon rule
+   is Unicode glyphs plus exactly two drawn marks (BinMark, the caret), and adding a
+   third drawn vocabulary for a disclosure the system already has a mark for is how
+   an icon set starts. `caretStyle` itself takes only open/closed, so the three-way
+   recipe is repeated here rather than imported.
+
+   The nudge is applied in the mark's OWN rotated frame, and it exists because the ink
+   is not centred in the box: the mark is a corner, so at 45° its apex sits low in the
+   6px square and at 225° it sits equally high. translate(-1,-1) resolves to 1.4px UP
+   at 45° and 1.4px DOWN at 225° — the same declaration correcting each direction's
+   own offset, which is why the up mark and the down mark now sit on one line.
+
+   LONGHANDS, never the `border` shorthand with borderTop/borderLeft: 'none'. React
+   diffs style objects key by key, so a re-render that changes only the shorthand's
+   colour re-sets `border` and never re-sets the two sides that were switched off —
+   the mark fills in and the caret becomes a diamond on first hover. currentColor for
+   the same reason: the colour then lives on the wrapper and the borders never change. */
+const NUDGE: Record<string, string> = {
+  45: 'translate(-1px, -1px)',
+  '-45': 'translate(-1px, 1px)',
+  225: 'translate(-1px, -1px)',
+}
+const caretMark = (deg: number, color: string): CSSProperties => ({
+  flex: 'none',
+  width: 6,
+  height: 6,
+  boxSizing: 'border-box',
+  borderRight: '1.5px solid currentColor',
+  borderBottom: '1.5px solid currentColor',
+  borderRadius: 1,
+  color,
+  transform: 'rotate(' + deg + 'deg) ' + NUDGE[String(deg)],
+  transition: 'transform var(--dur-hover) var(--ease-soft), color var(--dur-move) var(--ease-soft)',
+})
+/* the nesting pair — two of the same mark stacked, one level up from a single
+   stop's caret: expand every stop is two pointing down, collapse every stop is two
+   pointing up. Same mark, said twice, so the pair cannot read as a new icon. */
+function CaretStack({ up }: { up?: boolean }) {
+  return (
+    <span className="flex flex-col items-center gap-px">
+      <span style={caretMark(up ? 225 : 45, 'currentColor')} />
+      <span style={caretMark(up ? 225 : 45, 'currentColor')} />
+    </span>
+  )
+}
+
+/* a stop IS a node chip — the same object the entries below draw. The rail is
+   ONE line down the whole stop, row and opened well together: drawn per row it
+   stopped at the row's bottom edge and broke wherever a stop was open, which is
+   exactly where the eye needs it to continue. The last stop's rail ends at its
+   own RUNG rather than at a share of the stop's height, which on an open stop
+   would be half a well's worth and never end. */
+function Stop({
+  s,
+  focus,
+  open,
+  onToggle,
+  onFocus,
+  last,
+}: {
+  s: StopData
+  focus: string
+  open: boolean
+  onToggle: () => void
+  onFocus: Go
+  last: boolean
+}) {
+  const node = byId[s.id]
+  const [hov, setHov] = useState(false)
+  const entry = (l: Link, i: string, from: string, fromDomain: string, within?: string) => (
+    <EdgeEntry
+      key={i}
+      from={from}
+      fromDomain={fromDomain as any}
+      fromAnchor
+      fromWithin={within}
+      to={node.title}
+      toDomain={node.domain}
+      relation={EDGE_LABEL[l.type]}
+      color={EDGEHUE[l.type]}
+      direction={l.dir}
+      onTo={() => onFocus(s.id, 'LNK', true)}
+    />
+  )
+  return (
+    <div className="flex min-w-0 items-stretch">
+      <div className="relative flex-none" style={{ width: RAIL_X }}>
+        <span
+          className="absolute left-2 top-0 w-05 bg-rule"
+          style={{ height: last ? RUNG + 2 : '100%' }}
+        />
+        <span className="absolute left-2 h-05 bg-rule" style={{ top: RUNG, width: RAIL_X - 8 }} />
+      </div>
+      <div className={cx('min-w-0 flex-1', open && 'pb-2')}>
+        <button
+          type="button"
+          onClick={onToggle}
+          onMouseEnter={() => setHov(true)}
+          onMouseLeave={() => setHov(false)}
+          title={
+            (open ? 'click to collapse \u00b7 ' : 'click to expand \u00b7 ') +
+            s.n +
+            (s.n === 1 ? ' edge' : ' edges')
+          }
+          className="flex w-full min-w-0 cursor-pointer items-center gap-[10px] border-none bg-transparent py-[5px] pl-05 text-left"
+        >
+          {/* open lights the node's OWN edge: 1px → --stroke-rule in the same
+             domain hue, plus the raised wash. A ring in another hue read as the
+             chip changing what it is; this reads as the same chip, brighter. */}
+          <span
+            className={cx(
+              'inline-flex min-w-0 max-w-full items-center rounded-md shadow-lift-1 transition-[background-color,border-color,box-shadow] duration-[var(--dur-hover)] ease-soft',
+              open ? 'bg-hover-raised px-[10.5px] py-[3.5px]' : 'bg-raised px-[11px] py-1',
+            )}
+            style={{ border: (open ? 'var(--stroke-rule)' : '1px') + ' solid ' + DOMHUE[node.domain] }}
+          >
+            <span className="min-w-0 break-words font-ui text-body font-semibold leading-snug text-ink-1">
+              {node.title}
+            </span>
+          </span>
+          {/* the disclosure lives at the row's right edge, not inside the chip:
+             the chip is a node, and a caret on it would read as belonging to the
+             node rather than to the row. Here it pairs with the count — the two
+             things the closed row is offering — and stays clear of the head's
+             own caret, which sits inside its pill because the pill IS its button. */}
+          <span className="ml-auto flex flex-none items-center gap-1">
+            <span className="min-w-4 flex-none text-right font-mono text-body tabular-nums text-ink-2">{s.n}</span>
+            {/* a 20px cell, the same box the rail's expand/collapse buttons use, so
+               every caret in the pane falls on one vertical axis */}
+            <span className="grid size-5 flex-none place-items-center">
+              <span style={caretMark(open ? 45 : -45, open || hov ? 'var(--text-1)' : 'var(--text-3)')} />
+            </span>
+          </span>
+        </button>
+        {open ? (
+          /* opened detail is CONTAINED — the system's own grammar for a group */
+          <div className="mt-1 flex min-w-0 flex-col gap-3 rounded-lg bg-sunken px-3 py-[10px] shadow-[var(--sink-1)]">
+            <EntryGroup
+              title="direct"
+              items={s.direct}
+              render={(l, i) => entry(l, 'd' + i, byId[focus].title, byId[focus].domain)}
+            />
+            <EntryGroup
+              title="via children"
+              items={s.via}
+              render={(l, i) =>
+                entry(l, 'v' + i, byId[l.via as string].title, byId[l.via as string].domain, pathFrom(focus, l.via as string))
+              }
+            />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+export function ConnectionsPane({ focus, onFocus, onClose }: PaneProps) {
+  const n = byId[focus]
+  const mine = useMemo(() => subtree(focus), [focus])
+  const roads = useMemo(() => roadsFor(mine), [mine])
+  const stops = useMemo(() => neighbourhood(focus, roads, mine), [focus])
+  /* a SET, not a single id: comparing two neighbours means having both open at
+     once, and a rail that closed one stop to open another made you hold the
+     first in your head */
+  const [open, setOpen] = useState<Record<string, number>>({})
+  const [railOpen, setRailOpen] = useState(true)
+  useEffect(() => {
+    setOpen({})
+  }, [focus])
+  const toggle = (id: string) =>
+    setOpen((o) => {
+      const m = Object.assign({}, o)
+      if (m[id]) delete m[id]
+      else m[id] = 1
+      return m
+    })
+  return (
+    <section className={PANE} data-screen-label="connections">
+      <PaneHeader title="connections" onClose={onClose} />
+      {/* the rail's totals and its acts sit at the top, then the head — so the
+         rail reads as one line running down out of the focus node */}
+      <div className="flex min-w-0 flex-none flex-col gap-15 px-4 pt-3">
+        {/* the rail's own line: what the rail totals, and the two acts that
+           open or close all of it. It sits ABOVE the head rather than beside
+           it — a node title is unbounded, and anything sharing its row gets
+           squeezed by a long name. These belong to the rail, not to the pane,
+           so they stay off the frame beside the pane's ✕. The glyphs are the
+           house nesting pair, one level up from a stop's own caret. */}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="font-mono text-caption tabular-nums text-ink-2">
+            {stops.length} neighbours · {roads.length} edges
+          </span>
+          {railOpen && roads.length ? (
+            <span className="ml-auto flex flex-none items-center gap-05">
+              {(
+                [
+                  [false, 'expand all', () => setOpen(stops.reduce((m, s) => { m[s.id] = 1; return m }, {} as Record<string, number>))],
+                  [true, 'collapse all', () => setOpen({})],
+                ] as Array<[boolean, string, () => void]>
+              ).map(([up, label, act]) => (
+                <button
+                  key={label}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  onClick={act}
+                  className="box-border grid size-5 cursor-pointer place-items-center rounded-full border border-transparent bg-transparent p-0 text-ink-3 transition-[background-color,border-color,box-shadow] duration-[var(--dur-hover)] ease-soft hover:border-rule hover:bg-hover hover:text-ink-1"
+                >
+                  <CaretStack up={up} />
+                </button>
+              ))}
+            </span>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          onClick={() => setRailOpen((v) => !v)}
+          title={railOpen ? 'click to collapse the rail' : 'click to expand the rail'}
+          className="box-border inline-flex min-w-0 max-w-full cursor-pointer items-start gap-2 self-start rounded-md bg-raised px-[13px] py-[5px] text-left font-ui text-body font-bold leading-snug text-ink-1 shadow-lift-2"
+          style={{
+            border: 'var(--stroke-rule) solid ' + (DOMHUE[n && n.domain] || 'var(--swatch-anchor-fallback)'),
+          }}
+        >
+          <span style={{ ...caretMark(railOpen ? 45 : -45, 'var(--text-3)'), marginTop: railOpen ? 3 : 6 }} />
+          <span className="min-w-0 break-words">{n ? n.title : ''}</span>
+        </button>
+        {/* the rail leaves the head: without it the focus is just another chip in
+           the stack. Structure says "everything below hangs off this" more quietly
+           than any decoration on the chip would. */}
+        {railOpen && roads.length ? <span className="-mt-15 ml-2 h-2 w-05 flex-none bg-rule" /> : null}
+      </div>
+      <div className={cx(PANE_BODY, 'px-4 pb-4')}>
+        {roads.length === 0 ? (
+          <div className="text-body text-ink-3">
+            {n && n.kind === 'container' ? 'nothing beneath this links outside it' : 'no typed links from this topic'}
+          </div>
+        ) : railOpen ? (
+          stops.map((s, i) => (
+            <Stop
+              key={s.id}
+              s={s}
+              focus={focus}
+              last={i === stops.length - 1}
+              open={!!open[s.id]}
+              onToggle={() => toggle(s.id)}
+              onFocus={onFocus}
+            />
+          ))
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+/* ── Document — reading happens here; it does not also index the graph ── */
+export function DocPane({
+  focus,
+  onFocus,
+  onStartWalk,
+  onClose,
+}: PaneProps & { onStartWalk: (id: string, at: number) => void }) {
+  const n = byId[focus]
+  const through = WALKS.flatMap((w) => {
+    const i = w.stops.findIndex((s) => s.id === focus)
+    return i >= 0 ? [{ w, i }] : []
+  })
+  const note = through.length ? through[0].w.stops[through[0].i].note : null
+  return (
+    <section className={PANE} data-screen-label="document">
+      <PaneHeader title="document" onClose={onClose} />
+      <div className={PANE_BODY}>
+        <DocHeader
+          kind={n.kind === 'topic' ? 'topic' : 'container'}
+          title={n.title}
+          domain={n.domain}
+          ancestry={pathTo(focus)}
+        />
+        <div className="border-b border-hair px-5 py-3">
+          {note ? (
+            <p className="text-body leading-normal text-ink-1">{note}</p>
+          ) : (
+            <p className="text-body leading-normal text-ink-3">
+              no document body in this kit — <span className="font-mono text-caption">src/corpus/docs.ts</span> is not
+              mirrored here, and prose is not invented. Nodes that a walk passes through show that walk's authored stop
+              note instead.
+            </p>
+          )}
+        </div>
+        <div className="px-5 pt-3 pb-5">
+          <SectionLabel count={through.length}>walks through here</SectionLabel>
+          {through.length === 0 ? (
+            <div className="text-body text-ink-3">no authored walk stops here</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {through.map(({ w, i }) => (
+                <WalkCard
+                  key={w.id}
+                  title={w.title}
+                  meta={'stop ' + (i + 1) + ' of ' + w.stops.length + ' \u2014 ' + w.stops[i].note}
+                  onClick={() => onStartWalk(w.id, i)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ── Trail — temporal history, append-only — plus the walk controls ──── */
+export function TrailBar({
+  trail,
+  onFocus,
+  walk,
+  cursor,
+  onStartWalk,
+  onAdvance,
+  onStop,
+  onJump,
+  onReset,
+  onClose,
+}: {
+  trail: Array<{ id: string; via?: string; jump?: boolean }>
+  onFocus: Go
+  walk: string | null
+  cursor: number
+  onStartWalk: (id: string, at: number) => void
+  onAdvance: () => void
+  onStop: () => void
+  onJump: (i: number) => void
+  onReset: () => void
+  onClose: () => void
+}) {
+  const scroller = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (scroller.current) scroller.current.scrollLeft = scroller.current.scrollWidth
+  }, [trail.length])
+  const w = walk ? WALKS.find((x) => x.id === walk) : null
+  return (
+    <section className={cx(PANE, 'h-[116px] flex-none basis-[116px]')} data-screen-label="trail">
+      <PaneHeader title="trail" onClose={onClose} />
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* the trail is the horizontal scroller: mb-3 lifts its bar off
+             the pane's rounded bottom-left corner, same rule as the vertical ones */}
+          <div
+            ref={scroller}
+            className="mb-3 min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-4 pt-15 pb-1"
+          >
+            <div className="flex h-full items-center gap-[7px]">
+              {trail.map((t, i) => (
+                <TrailChip
+                  key={i}
+                  title={byId[t.id].title}
+                  domain={byId[t.id].domain}
+                  via={t.via}
+                  jump={t.jump}
+                  onClick={() => onFocus(t.id, 'TRL')}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="w-px shrink-0 bg-hair" />
+        <div className="w-[430px] shrink-0 overflow-y-auto px-4 pt-15 pb-2">
+          <SectionLabel action={<PillButton size="sm" onClick={onReset}>reset session</PillButton>}>walks</SectionLabel>
+          {!w ? (
+            <div className="flex flex-wrap gap-[7px]">
+              {WALKS.map((x) => (
+                <PillButton
+                  key={x.id}
+                  tone="walk"
+                  size="sm"
+                  glyph={'\u25b6'}
+                  title={x.description}
+                  onClick={() => onStartWalk(x.id, 0)}
+                >
+                  {x.title}
+                </PillButton>
+              ))}
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="max-w-[190px] truncate text-body font-bold text-ink-walk">{w.title}</span>
+                <span className="whitespace-nowrap text-caption tabular-nums text-ink-2">
+                  stop {cursor + 1} of {w.stops.length}
+                </span>
+                <span className="flex-1" />
+                {cursor < w.stops.length - 1 ? (
+                  <PillButton size="sm" tone="walk" onClick={onAdvance}>
+                    next {'\u25b6'}
+                  </PillButton>
+                ) : null}
+                <PillButton size="sm" tone="ghost" onClick={onStop}>
+                  {'\u2715'}
+                </PillButton>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-[5px]">
+                {w.stops.map((s, i) => (
+                  <StepDot
+                    key={i}
+                    n={i + 1}
+                    title={s.note}
+                    state={i === cursor ? 'current' : i < cursor ? 'done' : 'ahead'}
+                    onClick={() => onJump(i)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}

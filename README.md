@@ -9,7 +9,7 @@ and this export disagree, the export is right.
 
 ## Install
 
-Copy the three folders into the app:
+Copy the folders into the app:
 
 ```
 export/tokens/      →  src/kn/
@@ -42,6 +42,42 @@ breaks, you just lose the three-state behaviour.
 **On Tailwind v3?** Use `kn-theme.v3.js` as a `theme.extend` fragment instead of
 `kn-theme.css`, and delete the other. Never have both live.
 
+### The components and the Studio
+
+The skill folder also carries **real source**, not just rules:
+
+```
+skills/knowledge-network-design/components/  →  src/kn/components/
+skills/knowledge-network-design/studio/      →  src/kn/studio/
+```
+
+23 components in TypeScript + Tailwind classes, and the Studio itself —
+`studio-app.tsx.txt` (the shell), `panes.tsx.txt` (the five instrument panes) and
+`corpus.ts.txt` (a typed sample graph). Port these rather than rebuilding from the prompt files: the
+rules doc explains the decisions, the source carries the measurements.
+
+**Strip the trailing `.txt` on copy.** The files ship as `pane-header.tsx.txt`
+because the design system upstream compiles every `.tsx` it can see, and a shipped
+copy of a component would collide with the component itself. The suffix is the only
+thing standing between these files and being real source:
+
+```sh
+cd src/kn && find . -name "*.txt" -exec sh -c 'mv "$1" "${1%.txt}"' _ {} \;
+```
+
+Filenames are kebab-case (`pane-header.tsx`); the exported names are PascalCase
+(`PaneHeader`) as always. Rename the files if the app uses PascalCase filenames —
+nothing but the sibling imports depends on them.
+
+The Studio renders as soon as those two folders and the CSS above are in place. The
+one wiring step is `studio/corpus.ts` — replace it with the app's own
+`src/corpus/graph.ts` and `walks.ts` behind the same export names.
+
+Inline styles survive in a handful of places on purpose, each with a comment saying
+why: runtime drag geometry, SVG viewBoxes, the two drawn marks, `-webkit-line-clamp`
+stacks, and any value chosen per instance (a domain hue picked at runtime has no
+build-time class).
+
 ## What each file is for
 
 | File | Role |
@@ -51,7 +87,8 @@ breaks, you just lose the three-state behaviour.
 | `tailwind/kn-theme.css` | Tailwind v4 `@theme`. Turns tokens into classes so no rule needs an arbitrary value. |
 | `tailwind/kn-theme.v3.js` | Tailwind v3 fallback. Delete on v4. |
 | `assets/scrollbars.js` | Sets `data-sb` / `data-sb-js` for the scrollbar states. |
-| `skills/knowledge-network-design/` | The rules, for Claude Code. Read by the agent, not the bundler. `SKILL.md` is the entry point, `readme.md` the full argument, `components/contracts.d.ts` the prop shapes, `components/<area>/*.prompt.md` the per-component traps (areas: chrome, sidebar, graph, nav, doc, group). |
+| `assets/leaf.png` | The one hand-drawn asset. `LeafMark` masks it and paints it with a token colour. |
+| `skills/knowledge-network-design/` | The rules **and the source**, for Claude Code. `SKILL.md` is the entry point, `readme.md` the full argument, `components/contracts.d.ts` the prop shapes, `components/<area>/*.tsx.txt` the implementations (drop the `.txt`; kebab-case filenames, PascalCase exports), `components/<area>/*.prompt.md` the per-component traps (areas: chrome, sidebar, graph, nav, doc, group), `studio/` the app shell. |
 
 `kn-tokens.css` and `kn-theme.css` restate the same values — the first as
 `--moss-500`, the second as `--color-moss-500`. That duplication is deliberate:

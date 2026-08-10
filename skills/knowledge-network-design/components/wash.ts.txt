@@ -1,0 +1,40 @@
+/* The one shared transition. Every hover/press affordance in the system animates
+   the same three properties on the same clock — background, border, shadow — and
+   NEVER colour. Import this rather than restating it, so a change to the wash
+   timing is one edit. */
+export const WASH =
+  'transition-[background-color,border-color,box-shadow] duration-[var(--dur-hover)] ease-soft'
+
+/** Domain hue as a Tailwind class, not a value: a literal map so the JIT scanner
+ *  can see every class it must generate. Never build these names by template. */
+export const DOMAIN_BG = {
+  sys: 'bg-domain-sys',
+  math: 'bg-domain-math',
+  cs: 'bg-domain-cs',
+  net: 'bg-domain-net',
+  sec: 'bg-domain-sec',
+  se: 'bg-domain-se',
+} as const
+
+export const DOMAIN_TEXT = {
+  sys: 'text-domain-sys',
+  math: 'text-domain-math',
+  cs: 'text-domain-cs',
+  net: 'text-domain-net',
+  sec: 'text-domain-sec',
+  se: 'text-domain-se',
+} as const
+
+export type Domain = keyof typeof DOMAIN_BG
+
+/** Fallback is the neutral anchor swatch, never a domain hue: an unknown domain
+ *  must not borrow another domain's claim. */
+export const domainBg = (d?: string | null) =>
+  (d && DOMAIN_BG[d as Domain]) || 'bg-[var(--swatch-anchor-fallback)]'
+
+export const domainText = (d?: string | null) =>
+  (d && DOMAIN_TEXT[d as Domain]) || 'text-ink-1'
+
+/** Tiny class joiner. */
+export const cx = (...parts: Array<string | false | null | undefined>) =>
+  parts.filter(Boolean).join(' ')

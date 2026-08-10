@@ -1,0 +1,47 @@
+import type { PillButtonProps } from '../contracts'
+import { WASH, cx } from '../wash'
+
+/* One control, five tones. The app spelled this button out inline in six places
+   with slightly different padding and border colours each time; this is the
+   consolidation. `selected` overrides the tone's own skin — a selected quiet
+   button is a primary button. */
+const TONES = {
+  quiet: 'border-rule bg-transparent text-ink-2 enabled:hover:bg-hover',
+  primary: 'border-moss-300 bg-primary-wash text-primary-ink enabled:hover:bg-moss-100',
+  walk: 'border-acorn-300 bg-walk-wash text-ink-walk enabled:hover:bg-acorn-100',
+  danger: 'border-berry-100 bg-danger-wash text-danger enabled:hover:bg-berry-100',
+  ghost: 'border-transparent bg-transparent text-ink-2 enabled:hover:bg-hover',
+} as const
+
+/** A small round-cornered action. Labels name a STATE or an action, in lower case. */
+export function PillButton({
+  tone = 'quiet',
+  size = 'md',
+  glyph,
+  disabled,
+  selected,
+  onClick,
+  onMouseDown,
+  title,
+  children,
+}: PillButtonProps) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      onMouseDown={onMouseDown}
+      className={cx(
+        'inline-flex items-center gap-15 whitespace-nowrap rounded-full border font-ui font-semibold leading-snug',
+        'cursor-pointer disabled:cursor-not-allowed disabled:opacity-[var(--opacity-disabled)]',
+        size === 'sm' ? 'min-h-6 px-[9px] py-[3px] text-caption' : 'min-h-[var(--hit-min)] px-[13px] py-15 text-body',
+        selected ? 'border-moss-400 bg-primary-wash text-primary-ink' : TONES[tone] || TONES.quiet,
+        WASH,
+      )}
+    >
+      {glyph ? <span className="text-body opacity-85">{glyph}</span> : null}
+      {children}
+    </button>
+  )
+}

@@ -1,0 +1,1089 @@
+import { Children, Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
+import type { VersionedGroupProps } from '../contracts'
+import { WASH, cx } from '../wash'
+import { caretStyle } from '../nav/tree-row'
+import { bulletStyle } from '../sidebar/instrument-row' // the ring: an option not taken
+import { NodeChain } from '../graph/node-chain'
+
+/** A nested subgroup that holds several VERSIONS of itself, exactly one of which
+ *  is on screen. Four rows, in this order: the group's own name with its tally
+ *  and fold control, an editable description, the version picker, then the
+ *  group's contents chained by arrows.
+ *
+ *  Containment is depth, not hue: open, the group is the recessed well —
+ *  `bg-sunken` at `rounded-lg` with `--sink-1` — and its children are raised white
+ *  nodes inside it. The tally and the fold/close controls stay INSIDE the well
+ *  rather than straddling its edge pane-fashion: a group's edge can land against a
+ *  raised white node, and a 12px glyph half over white and half over the well tint
+ *  is hard to read whatever its ink. Folded, it is a node again, so it flips to a
+ *  raised white face with the well tint stacked behind — at `shadow-lift-2`, one
+ *  step above the `shadow-lift-1` of a plain NodeChip beside it in a chain, because
+ *  a stack of nodes outranks a single node and a chip's domain hue would otherwise
+ *  out-shout the group's neutral edge. One step, never two. Never a lift and a sink
+ *  on the same element, and never a coloured face or border to say "group". No
+ *  domain dot: the contents of a group can span many domains, and a single dot on
+ *  the head would claim one of them for all of it.
+ *
+ *  THE MENU HANGS OFF THE PICKER, NOT OFF THE GROUP. It is absolutely positioned
+ *  against the version row and overlays the contents below it. Anchoring it to
+ *  the bottom of the well — the obvious first move — puts the list a whole
+ *  subgroup's height away from the control that opened it, and an arbitrary
+ *  distance away, since the contents can be any length. A menu opens where you
+ *  clicked.
+ *
+ *  The live version is marked with a drawn CHECK, and every other row keeps
+ *  InstrumentRow's inset ring — see checkStyle below for why the filled moss disc
+ *  had to go: it collides with the green domain dots on the node chips a few pixels
+ *  under it. The state is still said twice, mark plus a medium → semibold step, so
+ *  it survives both a glance and greyscale.
+ *
+ *  Every editable string opens on a SINGLE click, each in a field at `rounded-xs`:
+ *  the group's name, the live version's name and the group's description. The
+ *  number before the title is not one of them — it is derived. On the picker row
+ *  that splits the click: the name edits, everything else — disc, figure, caret,
+ *  the space between — opens the menu.
+ *  "add new version" creates a version, selects it, and opens the picker's field
+ *  on it, so a new version is named where it will be read. A version name is
+ *  authored text and can be long — it gets its own row rather than riding beside
+ *  the group's name, where two editable strings on one line would compete.
+ *
+ *  Drag results (size, position), the two drawn marks and the -webkit-line-clamp
+ *  stacks stay inline styles: they are runtime values or geometry with an exact
+ *  weight, and neither has a build-time class. */
+
+function NameField({
+  value,
+  onCommit,
+  onCancel,
+  size,
+  weight,
+  family,
+  placeholder,
+}: {
+  value: string
+  onCommit: (v: string) => void
+  onCancel: () => void
+  size?: string
+  weight?: string
+  family?: string
+  placeholder?: string
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  const [draft, setDraft] = useState(value)
+  useEffect(() => {
+    const el = ref.current
+    if (el) {
+      el.focus()
+      el.select()
+    }
+  }, [])
+  return (
+    <input
+      ref={ref}
+      value={draft}
+      spellCheck={false}
+      onChange={(e) => setDraft(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === 'Enter') onCommit(draft.trim())
+        if (e.key === 'Escape') onCancel()
+      }}
+      onBlur={() => onCommit(draft.trim())}
+      placeholder={placeholder}
+      className="my-[-2px] min-w-0 flex-1 cursor-text select-text rounded-xs border border-[var(--border-strong)] bg-raised px-15 py-05 text-ink-1 shadow-[var(--ring-focus)] outline-none"
+      style={{
+        fontFamily: family || 'var(--font-ui)',
+        fontSize: size || 'var(--fs-body)',
+        fontWeight: (weight || 'var(--fw-medium)') as CSSProperties['fontWeight'],
+      }}
+    />
+  )
+}
+
+/** 18px, the size of a PANE's own ✕ (PaneHeader, legend variant) — a control
+ *  inside a pane may never out-size the pane's. The glyphs are point-sized
+ *  separately (✕ at 10, – and + at 12) because a cross puts far more ink on the
+ *  page than a single stroke at the same size; that is optical sizing, not a
+ *  weight change. */
+function IconButton({
+  label,
+  glyph,
+  size = 12,
+  onClick,
+  reachable = true,
+}: {
+  label: string
+  glyph: React.ReactNode
+  size?: number
+  onClick?: () => void
+  reachable?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      /* a receded button is invisible but still in the tab order and still answers
+         Enter; opacity and pointer-events do not fix that, tabIndex does. Focus
+         itself reveals the cluster, so nothing becomes unreachable. */
+      tabIndex={reachable ? 0 : -1}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick && onClick()
+      }}
+      className={cx(
+        'box-border grid size-[18px] shrink-0 cursor-pointer place-items-center rounded-full border border-transparent bg-transparent p-0 font-ui leading-none text-ink-2',
+        'hover:border-rule hover:bg-hover hover:text-ink-1',
+        WASH,
+      )}
+      style={{ fontSize: size }}
+    >
+      {glyph}
+    </button>
+  )
+}
+
+/** THE LIVE-VERSION MARK: a check, drawn as two strokes — the same construction as
+ *  TreeRow's caret, an element wearing two borders and rotated, so it lands at an
+ *  exact weight at an exact size.
+ *
+ *  It is NOT a filled moss disc, and that is a correction rather than a preference.
+ *  A disc was tried first (bulletStyle, the system's state light) and it collides
+ *  with the data channel: `--domain-sys` (#4a8a3c) and `--domain-se` (#4aa583) are
+ *  both greens within a step of `--accent-primary` (#558148), and NodeChip's domain
+ *  dot is the same 7–8px disc a few pixels below. Two green dots of the same size,
+ *  one meaning "this version is live" and one meaning "this node is a systems
+ *  node", is a collision no ink step fixes. A shape does: nothing else in the
+ *  system is a check, so a stroke mark can never be read as a swatch. Non-live rows
+ *  keep the inset ring — an option not taken — so on and off still share one
+ *  column. */
+function checkStyle(): CSSProperties {
+  return {
+    width: 9,
+    height: 5,
+    boxSizing: 'border-box',
+    borderLeft: '1.75px solid currentColor',
+    borderBottom: '1.75px solid currentColor',
+    transform: 'rotate(-45deg) translate(0, -1px)',
+  }
+}
+
+/** The restore mark: two drawn squares, the back one offset up and right, exactly
+ *  as a window's maximize control reads. Drawn in 1.25px strokes rather than
+ *  typed — ❑ and 🗗 both fall through to a symbol or emoji face at this size and
+ *  come back the wrong weight and the wrong advance beside – and ✕. */
+function RestoreMark() {
+  return (
+    <span className="relative block size-[10px]">
+      <span
+        className="absolute top-0 right-0 box-border size-[7px]"
+        style={{
+          borderTop: '1.25px solid currentColor',
+          borderRight: '1.25px solid currentColor',
+          borderTopRightRadius: 1.5,
+        }}
+      />
+      <span
+        className="absolute bottom-0 left-0 box-border size-[7px]"
+        style={{ border: '1.25px solid currentColor', borderRadius: 1.5 }}
+      />
+    </span>
+  )
+}
+
+/** An optional description line, edited in place. Empty, it is the invitation —
+ *  italic `text-ink-3`, the same register as "add new version": an action sitting
+ *  among names. Filled, it is prose at `text-ink-2` and stops being italic, because
+ *  italic is the mark of a thing that isn't there yet. Committing an empty field
+ *  clears the line back to the invitation; a description is optional both ways. */
+function DescLine({
+  text,
+  placeholder,
+  indent,
+  onCommit,
+}: {
+  text?: string
+  placeholder?: string
+  indent?: number
+  onCommit?: (v: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  if (!onCommit && !text) return null
+  return editing ? (
+    <div className="flex py-px pr-[7px]" style={{ paddingLeft: 7 + (indent || 0) }}>
+      <NameField
+        value={text || ''}
+        size="var(--fs-caption)"
+        onCommit={(v) => {
+          setEditing(false)
+          if (v !== (text || '')) onCommit!(v)
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    </div>
+  ) : (
+    <div data-grab="" className="block cursor-[inherit] py-px pr-[7px]" style={{ paddingLeft: 7 + (indent || 0) }}>
+      {/* the I-beam belongs to the WORDS, not to the line: a caret over the empty
+          remainder of a row promises a field where there is only background, and
+          that strip is the group's drag surface */}
+      <span
+        title={onCommit ? 'click to edit' : undefined}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (onCommit) setEditing(true)
+        }}
+        className={cx(
+          'inline-block max-w-full font-ui text-caption leading-snug',
+          text ? 'text-ink-2 not-italic' : 'text-ink-3 italic',
+          onCommit ? 'cursor-text' : 'cursor-[inherit]',
+        )}
+      >
+        {text || placeholder}
+      </span>
+    </div>
+  )
+}
+
+export function VersionedGroup({
+  title = 'untitled',
+  index,
+  description,
+  versions = [],
+  activeId,
+  folded,
+  defaultFolded = false,
+  count,
+  addLabel = 'add new version',
+  defaultOpen = false,
+  descPlaceholder = 'enter description',
+  emptyLabel = 'no nodes in this version \u2014 drag one in',
+  numberSteps = true,
+  countLabel = 'nodes',
+  onReorderNodes,
+  maxWidth = 300,
+  bodyMaxHeight = 260,
+  menuMaxHeight = 240,
+  foldedMinWidth = 190,
+  resizable = true,
+  minWidth = 200,
+  resizeMaxWidth = 680,
+  minBodyHeight = 72,
+  onResize,
+  movable = true,
+  onMove,
+  onDeleteVersion,
+  ungroupBlockedLabel,
+  confirmDelete = true,
+  onRetitle,
+  onDescribe,
+  onSelect,
+  onRename,
+  onAddVersion,
+  onToggleFold,
+  onClose,
+  children,
+}: VersionedGroupProps) {
+  const [open, setOpen] = useState(defaultOpen)
+  const [editing, setEditing] = useState<'title' | 'version' | null>(null)
+  const [ownFold, setOwnFold] = useState(defaultFolded)
+  const [hot, setHot] = useState<string | null>(null)
+  const [size, setSize] = useState<{ w: number | null; h: number | null } | null>(null) // once dragged
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null) // once moved
+  const [carrying, setCarrying] = useState(false)
+  const shell = useRef<HTMLDivElement>(null)
+  const body = useRef<HTMLDivElement>(null)
+  /* The two controls keep the pane's manners: absent while the group is at rest,
+     present the moment the pointer or the keyboard is inside it, receding on the
+     scrollbar's own grace period (window.PKT_SB.LEAVE) so everything that recedes
+     in this product does it on one clock. The TALLY does not recede — it is the
+     one thing a dormant group still has to say, and it is what a folded group is
+     read for. The buttons keep their space while hidden, so nothing reflows when
+     they arrive. */
+  const [live, setLive] = useState(false)
+  /* The head row has fixed furniture — the index, the tally, two controls — and below
+     about 250px it cannot hold all of it and a legible name. So the tally drops to its
+     own line only when the group is ACTUALLY that narrow, measured rather than assumed:
+     folded used to mean narrow, and a wide folded group ended up with a second line it
+     had plenty of room to avoid. */
+  const [narrow, setNarrow] = useState(false)
+  const [refusal, setRefusal] = useState<string | null>(null)
+  /* Deleting a version destroys authored work that is not on screen — the nodes of a
+     version you are not looking at — so unlike ungrouping, which is refused, this one
+     is CONFIRMED. The confirmation happens in the row itself rather than in a dialog:
+     the thing being deleted stays visible and in place, and the two answers sit where
+     the ✕ was. A dialog would cover the list you are choosing from. */
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const isFolded = folded === undefined ? ownFold : folded
+  const active = versions.find((v) => v.id === activeId) || versions[0] || { id: null, name: 'untitled' }
+  const kids = Children.toArray(children).filter(Boolean) as ReactElement[]
+  const tally = count === undefined ? kids.length : count
+  /* The body IS a NodeChain. A version's contents are a chain like any other — the
+     same arrows, the same drag-to-reorder, the same derived numbering off the group's
+     own index — so the group hands them to the chain rather than keeping a second,
+     poorer copy of that behaviour. It also means a node inside a version can be
+     deleted and moved exactly as one on the road can. */
+
+  useEffect(() => {
+    const el = shell.current
+    if (!el || typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver((entries) => {
+      const box = entries[0] && entries[0].contentRect
+      if (box) setNarrow(box.width < 250)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const el = shell.current
+    if (!el) return undefined
+    let t: ReturnType<typeof setTimeout>
+    const LEAVE = (window as any).PKT_SB?.LEAVE || 500
+    const on = () => {
+      clearTimeout(t)
+      setLive(true)
+    }
+    const off = () => {
+      clearTimeout(t)
+      t = setTimeout(() => setLive(false), LEAVE)
+    }
+    el.addEventListener('pointerenter', on)
+    el.addEventListener('pointerleave', off)
+    el.addEventListener('focusin', on)
+    el.addEventListener('focusout', off)
+    return () => {
+      clearTimeout(t)
+      el.removeEventListener('pointerenter', on)
+      el.removeEventListener('pointerleave', off)
+      el.removeEventListener('focusin', on)
+      el.removeEventListener('focusout', off)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open) return undefined
+    const away = (e: MouseEvent) => {
+      if (shell.current && !shell.current.contains(e.target as Node)) {
+        setOpen(false)
+        setConfirming(null)
+      }
+    }
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        setConfirming(null)
+      }
+    }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('mousedown', away)
+      document.removeEventListener('keydown', key)
+    }
+  }, [open])
+
+  const fold = () => {
+    setOpen(false)
+    if (folded === undefined) setOwnFold((f) => !f)
+    if (onToggleFold) onToggleFold(!isFolded)
+  }
+
+  /* UNGROUPING IS REFUSED WHILE THERE IS MORE THAN ONE VERSION. Ungrouping spills a
+     group's nodes into its parent, and only ONE version's nodes can be spilled —
+     the others would be silently discarded. So the act is blocked rather than
+     confirmed: a dialog asking "are you sure" would be asking the user to approve
+     losing work they cannot see. The note says which condition failed and what
+     clears it, and it dismisses itself on the next click or after a few seconds
+     rather than needing a button of its own. */
+  const askUngroup = () => {
+    if (versions.length > 1) {
+      setRefusal(
+        ungroupBlockedLabel ||
+          'cannot ungroup \u2014 ' + versions.length + ' versions live here; delete all but one first',
+      )
+      return
+    }
+    /* Ungrouping is a SPILL, not a delete: the live version's nodes take the group's
+       own place in the parent, in order, and inherit the parent's numbering. The
+       component cannot restructure the parent — the children belong to the caller —
+       so it hands back which version to spill and how many nodes that is, and the
+       caller splices them into the slot the group occupied. */
+    if (onClose) onClose({ versionId: active.id, count: kids.length })
+  }
+
+  useEffect(() => {
+    if (!refusal) return undefined
+    const t = setTimeout(() => setRefusal(null), 4500)
+    const away = () => setRefusal(null)
+    document.addEventListener('pointerdown', away, true)
+    return () => {
+      clearTimeout(t)
+      document.removeEventListener('pointerdown', away, true)
+    }
+  }, [refusal])
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation()
+
+  /* RESIZE BY THE EDGES. The group has sensible bounds (maxWidth, bodyMaxHeight)
+     and the user can override them by dragging the box itself — the right edge for
+     width, the bottom edge for height, the corner for both. No visible grip: the
+     cursor is the affordance, and a drawn handle would be one more mark competing
+     with the controls in a well that is already dense. The strips are inset from
+     the corners so they never sit on the rounded-lg arc. Once dragged, the drag
+     wins: maxWidth stops applying, because a limit the user has already answered
+     is no longer a limit. The pointer is captured so the drag survives leaving the
+     strip, and nothing transitions during it — a transition on width turns a drag
+     into a lag. */
+  const startDrag = (axis: 'x' | 'y' | 'both') => (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const box = shell.current && shell.current.getBoundingClientRect()
+    if (!box) return
+    const bodyBox = body.current && body.current.getBoundingClientRect()
+    const from = {
+      x: e.clientX,
+      y: e.clientY,
+      w: box.width,
+      h: (size && size.h) || (bodyBox && Math.round(bodyBox.height)) || bodyMaxHeight,
+    }
+    const node = e.currentTarget as HTMLElement
+    let last = { w: (size && size.w) || Math.round(box.width), h: from.h }
+    try {
+      node.setPointerCapture(e.pointerId)
+    } catch { /* older pointer impls */ }
+    const move = (ev: PointerEvent) => {
+      const w =
+        axis === 'y'
+          ? last.w
+          : Math.round(Math.max(minWidth, Math.min(resizeMaxWidth, from.w + (ev.clientX - from.x))))
+      const h = axis === 'x' ? last.h : Math.round(Math.max(minBodyHeight, from.h + (ev.clientY - from.y)))
+      last = { w, h }
+      setSize(last)
+    }
+    const up = () => {
+      node.removeEventListener('pointermove', move)
+      node.removeEventListener('pointerup', up)
+      node.removeEventListener('pointercancel', up)
+      if (onResize) onResize({ width: last.w, height: last.h })
+    }
+    node.addEventListener('pointermove', move)
+    node.addEventListener('pointerup', up)
+    node.addEventListener('pointercancel', up)
+  }
+
+  /* A double-click on an edge gives that dimension back to the component: the
+     right edge resets the width, the bottom edge the height, the corner both. Same
+     act as double-clicking a window's edge — the drag is an override, and this
+     withdraws it, so the group returns to sizing itself from its container and its
+     contents rather than to some other fixed number. */
+  const resetAxis = (axis: 'x' | 'y' | 'both') => (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSize((s) => {
+      if (!s) return null
+      const next = { w: axis === 'y' ? s.w : null, h: axis === 'x' ? s.h : null }
+      const cleared = !next.w && !next.h ? null : next
+      if (onResize) onResize({ width: next.w, height: next.h })
+      return cleared
+    })
+  }
+
+  /* MOVING THE WHOLE GROUP. The grab surface is the group's own background — the
+     well between its rows, and the empty part of the title row — marked data-grab,
+     so a pointerdown that lands on a control, a name or a node never starts a drag.
+     No top-centre grip: the background already IS the handle, the cursor says so
+     (grab → grabbing), and a drawn grip would add a mark to a well that already
+     carries three controls, a check, a rail and a tally. Picking the group up
+     swaps its sink for --lift-drag, which is the one moment a group is legitimately
+     raised: it has been lifted off the pane. */
+  const startMove = (e: React.PointerEvent) => {
+    if (!movable || e.button !== 0) return
+    const el = e.target as HTMLElement
+    if (!(el && el.hasAttribute && el.hasAttribute('data-grab'))) return
+    e.preventDefault()
+    const from = { x: e.clientX, y: e.clientY, ox: (pos && pos.x) || 0, oy: (pos && pos.y) || 0 }
+    const node = e.currentTarget as HTMLElement
+    let last = { x: from.ox, y: from.oy }
+    setCarrying(true)
+    try {
+      node.setPointerCapture(e.pointerId)
+    } catch { /* older pointer impls */ }
+    const move = (ev: PointerEvent) => {
+      last = { x: Math.round(from.ox + (ev.clientX - from.x)), y: Math.round(from.oy + (ev.clientY - from.y)) }
+      setPos(last)
+    }
+    const up = () => {
+      node.removeEventListener('pointermove', move)
+      node.removeEventListener('pointerup', up)
+      node.removeEventListener('pointercancel', up)
+      setCarrying(false)
+      if (onMove) onMove(last)
+    }
+    node.addEventListener('pointermove', move)
+    node.addEventListener('pointerup', up)
+    node.addEventListener('pointercancel', up)
+  }
+
+  const EDGE_TITLE = 'drag to resize \u00b7 double-click to reset'
+  const edge = (side: 'right' | 'bottom' | 'corner') => {
+    if (side === 'right')
+      return (
+        <span
+          aria-hidden="true"
+          title={EDGE_TITLE}
+          onPointerDown={startDrag('x')}
+          onDoubleClick={resetAxis('x')}
+          className="absolute top-[14px] right-[-3px] bottom-[14px] z-2 w-2 cursor-ew-resize touch-none bg-transparent"
+        />
+      )
+    if (side === 'bottom')
+      return (
+        <span
+          aria-hidden="true"
+          title={EDGE_TITLE}
+          onPointerDown={startDrag('y')}
+          onDoubleClick={resetAxis('y')}
+          className="absolute right-[14px] bottom-[-3px] left-[14px] z-2 h-2 cursor-ns-resize touch-none bg-transparent"
+        />
+      )
+    return (
+      <span
+        aria-hidden="true"
+        title={EDGE_TITLE}
+        onPointerDown={startDrag('both')}
+        onDoubleClick={resetAxis('both')}
+        className="absolute right-[-3px] bottom-[-3px] z-2 size-4 cursor-nwse-resize touch-none bg-transparent"
+      />
+    )
+  }
+
+  /* THE TALLY CARRIES ITS OWN WORD — as a bare figure it read as a stray number,
+     worst of all folded, where there is no visible body for it to be counting. It
+     sits with the controls when the group is open, so the head reads title-first and
+     the right edge collects everything that reports on or acts on the body.
+
+     BELOW ~250px IT MOVES TO ITS OWN LINE. The head already carries the index and two
+     controls, and the word costs five times the figure it glosses; in a narrow row it
+     left the title ~50px and broke a name mid-word. A second line is cheaper than a
+     clipped name — but only where the row genuinely cannot hold both, which is why the
+     width is measured (ResizeObserver) rather than inferred from being folded.
+
+     Both halves sit at text-ink-3 — a figure glanced at beside a name is the one
+     content kind the system licenses that ink for — with the figure in mono medium,
+     not regular: JetBrains ships 400 and 500, and at 11px on warm paper the lighter
+     face stops holding its own beside the word. It is inline flow rather than a flex
+     row so the space between figure and word is a REAL space, and copies as one. */
+  const word = tally === 1 ? String(countLabel).replace(/s$/, '') : countLabel
+  const tallyLine = (
+    <span
+      title={tally + ' ' + word + ' inside this version'}
+      className="inline-block shrink-0 font-ui text-micro font-normal leading-snug text-ink-3"
+    >
+      <span className="font-mono font-medium tabular-nums">{tally}</span>
+      {' ' + word}
+    </span>
+  )
+
+  /* BASELINE, not centre, on the head row. It holds three type sizes — the index at
+     12, the title at 13, the tally at 11 — and centring their line boxes leaves each
+     sitting at its own height, so they read as three things near each other rather than
+     one line. The button cluster has no text to align, so it pins to the top and is
+     nudged onto the first line by hand. */
+  const headRow = (
+    <div data-grab="" className="flex min-h-[22px] items-baseline gap-15">
+      {/* the number is DERIVED — it says where this group sits among its siblings,
+          not what it is called — so it is outside the editable string, in mono
+          like every other figure in the system. Renaming the group never touches
+          it, and re-ordering never has to rewrite a name. */}
+      {index ? (
+        <span className="-mr-05 shrink-0 font-mono text-caption font-medium leading-snug tabular-nums text-ink-2">
+          {index}
+        </span>
+      ) : null}
+      {editing === 'title' ? (
+        <NameField
+          value={title}
+          family="var(--font-display)"
+          weight="var(--fw-bold)"
+          onCommit={(v) => {
+            setEditing(null)
+            if (v && v !== title && onRetitle) onRetitle(v)
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : (
+        <span
+          data-grab=""
+          /* a floor, not a share: the head's fixed furniture is what shrinks when the
+             group is narrow, never the name */
+          className="mr-05 block min-w-24 shrink grow-0 basis-auto cursor-[inherit]"
+        >
+          <span
+            title={title}
+            onClick={(e) => {
+              stop(e)
+              setEditing('title')
+            }}
+            className="cursor-text overflow-hidden font-display text-body font-bold leading-snug text-ink-1"
+            style={{
+              /* The wrapper above is a BLOCK, not a flex row: a flex item is
+                 blockified, which turns the legacy -webkit-box display below into
+                 flow-root and leaves -webkit-line-clamp inert. */
+              width: 'fit-content',
+              /* THE TITLE WRAPS, open or folded. It is a name — corpus text, kept
+                 verbatim — and the head row also carries the tally and two controls,
+                 so a single line cut most titles off at their most useful end. Two
+                 lines open; three folded, where the title is all there is to read.
+                 The label is sized to its own text so the empty rest of the row stays
+                 background rather than a field that is not there. */
+              maxWidth: '100%',
+              display: '-webkit-box',
+              /* three lines folded, not two: the head row's fixed furniture — the
+                 index, and a control cluster that reserves its width even while the
+                 buttons are receded — leaves the title well under half the well's
+                 width, and a two-line cap dropped whole words. Folded, the title is
+                 all there is to read, so it gets the lines. */
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: isFolded ? 3 : 2,
+              whiteSpace: 'normal',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {title}
+          </span>
+        </span>
+      )}
+      <span className="flex-1" />
+      {narrow ? null : tallyLine}
+      <span className="-mt-px flex h-[18px] shrink-0 items-center gap-px self-start">
+        <span
+          className={cx(
+            'flex items-center gap-px transition-opacity duration-[var(--dur-fade)] ease-soft',
+            live || open ? 'opacity-100' : 'pointer-events-none opacity-0',
+          )}
+        >
+          <IconButton
+            label={isFolded ? 'maximize' : 'minimize'}
+            glyph={isFolded ? <RestoreMark /> : '\u2013'}
+            onClick={fold}
+            reachable={live || open}
+          />
+          {onClose ? (
+            <IconButton label="ungroup nodes" glyph={'\u2715'} size={10} onClick={askUngroup} reachable={live || open} />
+          ) : null}
+        </span>
+      </span>
+    </div>
+  )
+
+  const picker = (
+    <div className="relative">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          if (!editing) setOpen((o) => !o)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setOpen((o) => !o)
+          }
+        }}
+        onMouseEnter={() => setHot('picker')}
+        onMouseLeave={() => setHot(null)}
+        className={cx(
+          'box-border flex min-h-[var(--hit-min)] items-start gap-15 rounded-sm border pt-[5px] pr-15 pb-[5px] pl-[7px]',
+          hot === 'picker' && !editing ? 'border-rule bg-sunken-2' : 'border-transparent bg-transparent',
+          editing ? 'cursor-default' : 'cursor-pointer',
+          WASH,
+        )}
+      >
+        <span className="grid h-[18px] w-3 shrink-0 place-items-center text-primary-ink">
+          <span style={checkStyle()} />
+        </span>
+        {(active as any).label ? (
+          <span className="shrink-0 font-mono text-micro font-medium leading-[18px] tabular-nums text-primary-ink">
+            {(active as any).label}
+          </span>
+        ) : null}
+        {editing === 'version' ? (
+          <NameField
+            value={active.name}
+            weight="var(--fw-semibold)"
+            onCommit={(v) => {
+              setEditing(null)
+              if (v && v !== active.name && onRename) onRename(active.id as string, v)
+            }}
+            onCancel={() => setEditing(null)}
+          />
+        ) : (
+          <span className="block min-w-0 flex-1 cursor-[inherit]">
+            <span
+              title={active.name}
+              onClick={(e) => {
+                stop(e)
+                setOpen(false)
+                setEditing('version')
+              }}
+              className="cursor-text overflow-hidden font-ui text-body font-semibold leading-snug text-primary-ink"
+              style={{
+                width: 'fit-content',
+                /* A version name is authored text and can run long, so it WRAPS — to
+                   two lines, then an ellipsis. Truncating at one line hid the end of
+                   every descriptive name, which is the only thing distinguishing one
+                   version from another; wrapping without a limit let a paragraph
+                   pushed into the field shove the whole body down the pane. */
+                maxWidth: '100%',
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: 2,
+                whiteSpace: 'normal',
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {active.name}
+            </span>
+          </span>
+        )}
+        <span
+          className={cx(
+            'mt-px grid size-4 shrink-0 place-items-center transition-colors duration-[var(--dur-hover)] ease-soft',
+            open ? 'text-ink-2' : 'text-ink-3',
+          )}
+        >
+          <span style={caretStyle(open)} />
+        </span>
+      </div>
+      {open ? (
+        <div
+          role="listbox"
+          /* the menu is exactly as wide as the picker it hangs off, and its rows
+             crop with an ellipsis. It is absolutely positioned, so the group's own
+             maxWidth cannot reach it — left unbounded, one long version name drags
+             the whole list across the pane. Long lists scroll. */
+          className="absolute top-[calc(100%+3px)] right-0 left-0 z-30 overflow-x-hidden overflow-y-auto rounded-md border border-rule bg-raised p-1 shadow-lift-2"
+          style={{ maxHeight: menuMaxHeight }}
+        >
+          {versions.map((v) => (
+            <VersionRow
+              key={v.id}
+              version={v}
+              on={v.id === active.id}
+              onPick={() => {
+                setOpen(false)
+                if (onSelect) onSelect(v.id)
+              }}
+              confirming={confirming === v.id}
+              onCancel={() => setConfirming(null)}
+              onDelete={
+                onDeleteVersion && versions.length > 1
+                  ? () => {
+                      if (confirmDelete && confirming !== v.id) {
+                        setConfirming(v.id)
+                        return
+                      }
+                      setConfirming(null)
+                      onDeleteVersion(v.id)
+                    }
+                  : undefined
+              }
+            />
+          ))}
+          <div className="mx-15 my-1 h-px bg-hair" />
+          <AddRow
+            label={addLabel}
+            onClick={() => {
+              setOpen(false)
+              if (onAddVersion) onAddVersion()
+              setEditing('version')
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+
+  const desc = (
+    <DescLine
+      text={description}
+      placeholder={descPlaceholder}
+      onCommit={onDescribe ? (v) => onDescribe(v) : undefined}
+    />
+  )
+
+  /* the group has ONE description, under the title: it is true of the group
+     whichever version is showing. A per-version line was tried and dropped — the
+     version's name is the version's description. */
+
+  return (
+    <div
+      ref={shell}
+      className="relative"
+      style={{
+        width: size && size.w ? size.w : undefined,
+        maxWidth: size && size.w ? undefined : maxWidth,
+        minWidth: isFolded ? foldedMinWidth : undefined,
+        /* Folded, the group reserves the space its own stacked tint occupies instead of
+           bleeding outside its layout box. The peek used to hang 6px below and 5px
+           right of the shell, where it painted over the top of the chain's arrow and
+           made it read as a short arrow rather than a full one. */
+        paddingRight: isFolded ? 6 : undefined,
+        paddingBottom: isFolded ? 7 : undefined,
+        transform: pos ? 'translate(' + pos.x + 'px, ' + pos.y + 'px)' : undefined,
+        zIndex: carrying ? 40 : undefined,
+      }}
+    >
+      {isFolded ? (
+        <div aria-hidden="true" className="absolute inset-[7px_0_0_7px] z-0 rounded-lg bg-sunken-2" />
+      ) : null}
+      <div
+        data-grab=""
+        onPointerDown={startMove}
+        className={cx(
+          'relative z-1 box-border flex flex-col gap-1 rounded-lg border select-none',
+          isFolded ? 'px-[9px] pt-2 pb-[9px]' : 'px-2 pt-2 pb-3',
+          isFolded ? 'border-rule bg-raised' : 'border-transparent bg-sunken',
+          /* 'move' — the four-direction arrow. A hand reads as "follow this link" or
+             "pick this up and drop it somewhere that accepts it"; this drag just
+             repositions the group, which is what the four arrows mean.
+             'inherit' when the group does not move itself: inside a NodeChain the slot
+             under it says move, and reasserting the plain arrow would hide the chain's
+             only affordance. Same rule as NodeChip. */
+          movable ? 'cursor-move' : 'cursor-[inherit]',
+          carrying ? 'transition-none' : WASH,
+        )}
+        style={{
+          boxShadow: carrying ? 'var(--lift-drag)' : isFolded ? 'var(--lift-2)' : 'var(--sink-1)',
+        }}
+      >
+        {refusal ? (
+          <div
+            role="status"
+            className="absolute top-7 right-2 z-[45] max-w-[216px] rounded-md border border-rule bg-raised px-[11px] py-2 font-ui text-caption leading-snug text-ink-2 shadow-lift-2"
+          >
+            {refusal}
+          </div>
+        ) : null}
+        {/* folded, only the WIDTH edge exists: a folded group has no body to make
+            taller, and the height it does have is its own title wrapping. */}
+        {resizable ? edge('right') : null}
+        {isFolded || !resizable ? null : edge('bottom')}
+        {isFolded || !resizable ? null : edge('corner')}
+        <div data-grab="" className="pr-05 pl-[7px]">
+          {headRow}
+        </div>
+        {narrow ? (
+          <div data-grab="" className="pr-05 pl-[7px]">
+            {tallyLine}
+          </div>
+        ) : null}
+        {isFolded ? null : desc}
+        {isFolded ? null : picker}
+        {/* THE VERSION'S BODY. Every node in the group hangs off one hairline rail
+            that starts under the picker's state light and runs to the last node. It is
+            the ancestry line, so it is neutral bark rather than moss: the rail
+            says "these belong to the row above", and a coloured rule would read
+            as a claim about the contents instead. Without it a reader has no way
+            to tell whether the nodes belong to the group or to the version that
+            happens to be showing — and they belong to the version. */}
+        {isFolded ? null : (
+          <div
+            ref={body}
+            data-grab=""
+            className="ml-[13px] flex flex-col overflow-x-hidden overflow-y-auto border-l-[1.5px] border-bark-300 pl-[10px]"
+            style={
+              /* Dragging the bottom edge sets a real HEIGHT here, not a ceiling: a
+                 max-height taller than the nodes changes nothing on screen, which is
+                 why the box refused to grow. Undragged it keeps the ceiling and the
+                 body is as tall as its contents. */
+              size && size.h ? { height: size.h, minHeight: 0 } : { maxHeight: bodyMaxHeight }
+            }
+          >
+            {kids.length === 0 ? (
+              /* A new version starts empty, and an empty version is not the same
+                 thing as a broken one — so the body says what is missing and how
+                 it gets filled. Dashed always means conditional in this system:
+                 a placeholder awaiting a node is exactly the case the dash is
+                 for. rounded-md is the drop-zone radius. It fills whatever height
+                 the user has dragged the body to — the zone IS the space nodes
+                 will land in, so it should be that size. */
+              <div
+                data-grab=""
+                className={cx(
+                  'mt-15 mr-1 grid min-h-0 place-items-center rounded-md border-[1.5px] border-dashed border-[var(--border-dashed)] bg-transparent px-3 py-[11px] text-center font-ui text-caption leading-snug text-ink-3',
+                  size && size.h ? 'flex-1' : 'flex-none',
+                )}
+              >
+                {emptyLabel}
+              </div>
+            ) : (
+              <div data-grab="" className="pt-15 pr-1">
+                <NodeChain number={numberSteps && !!index} prefix={index} onReorder={onReorderNodes}>
+                  {kids}
+                </NodeChain>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function VersionRow({
+  version,
+  on,
+  onPick,
+  onDelete,
+  confirming,
+  onCancel,
+}: {
+  version: { id: string; name: string; label?: string }
+  on?: boolean
+  onPick?: () => void
+  onDelete?: () => void
+  confirming?: boolean
+  onCancel?: () => void
+}) {
+  /* the row's ✕ recedes on the same grace period as the head's controls and the
+     scrollbar (window.PKT_SB.LEAVE) — one clock for everything that recedes */
+  const [hot, setHot] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  const show = () => {
+    if (timer.current) clearTimeout(timer.current)
+    setHot(true)
+  }
+  const hide = () => {
+    if (timer.current) clearTimeout(timer.current)
+    const LEAVE = (window as any).PKT_SB?.LEAVE || 500
+    timer.current = setTimeout(() => setHot(false), LEAVE)
+  }
+  return (
+    /* hover OR focus: React's onFocus/onBlur bubble, so tabbing to either button
+       reveals the row's ✕. An opacity-0 control is still in the tab order and still
+       answers Enter, so a mouse-only reveal would leave a destructive button
+       reachable and invisible — hence tabIndex -1 on it while hidden as well. The
+       wrapper is a plain positioning div: role="option" stays on the picking button,
+       since an ARIA option may not contain interactive descendants. */
+    <div className="relative flex" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+      {confirming ? (
+        <div className="box-border flex min-h-[var(--hit-min)] w-full items-center gap-15 rounded-sm bg-danger-wash py-1 pr-15 pl-2 font-ui text-caption text-ink-2">
+          <span className="min-w-0 flex-1 truncate">delete this version?</span>
+          <ConfirmButton label="keep" onClick={onCancel} />
+          <ConfirmButton label="delete" danger onClick={onDelete} />
+        </div>
+      ) : (
+        <Fragment>
+          <button
+            type="button"
+            role="option"
+            aria-selected={on}
+            onClick={onPick}
+            className={cx(
+              'box-border flex min-h-[var(--hit-min)] w-full cursor-pointer items-center gap-15 rounded-sm border px-2 py-1 text-left font-ui text-body',
+              hot ? 'border-rule bg-hover-raised' : 'border-transparent bg-transparent',
+              on ? 'font-semibold text-primary-ink' : 'font-medium text-ink-1',
+              WASH,
+            )}
+          >
+            <span className="grid w-3 shrink-0 place-items-center text-primary-ink">
+              {on ? <span style={checkStyle()} /> : <span style={bulletStyle(false)} />}
+            </span>
+            {version.label ? (
+              <span
+                className={cx(
+                  'shrink-0 font-mono text-micro tabular-nums',
+                  on ? 'text-primary-ink' : 'text-ink-2',
+                )}
+              >
+                {version.label}
+              </span>
+            ) : null}
+            <span className={cx('min-w-0 flex-1 truncate', onDelete && 'pr-4')}>{version.name}</span>
+          </button>
+          {/* deleting a version is destructive, so the control is BERRY AT REST — hover is
+              a one-step wash of an element's own family and never a hue change, so the hue
+              belongs to the control, not to the hover. Same recipe as NodeChip's ✕. It is
+              absent while a group has a single version: there is no version to fall back
+              to, and emptying the group is the group's own ✕, not this one. It arrives with
+              the row's hover, the row-scale version of the recede the head's controls do. */}
+          {onDelete ? (
+            <button
+              type="button"
+              title="delete this version"
+              aria-label="delete this version"
+              tabIndex={hot ? 0 : -1}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              className={cx(
+                'absolute top-[5px] right-[5px] box-border grid size-[18px] cursor-pointer place-items-center rounded-full border border-transparent bg-transparent p-0 font-ui text-[10px] leading-none text-danger',
+                'hover:border-danger hover:bg-danger-wash hover:text-berry-600',
+                hot ? 'opacity-100' : 'pointer-events-none opacity-0',
+                'transition-opacity duration-[var(--dur-fade)] ease-soft',
+                WASH,
+              )}
+            >
+              {'\u2715'}
+            </button>
+          ) : null}
+        </Fragment>
+      )}
+    </div>
+  )
+}
+
+/** The two answers, in the row where the question was asked. Text-weight controls,
+ *  not filled buttons: the row is already washed berry, and a solid button inside a
+ *  washed row is two statements of the same alarm. */
+function ConfirmButton({ label, danger, onClick }: { label: string; danger?: boolean; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick && onClick()
+      }}
+      className={cx(
+        'box-border shrink-0 cursor-pointer rounded-sm border border-transparent bg-transparent px-[9px] py-[3px] font-ui text-caption',
+        danger
+          ? 'font-semibold text-berry-600 hover:border-danger hover:bg-berry-100'
+          : 'font-medium text-ink-2 hover:border-rule hover:bg-hover',
+        WASH,
+      )}
+    >
+      {label}
+    </button>
+  )
+}
+
+function AddRow({ label, onClick }: { label: string; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        'box-border flex min-h-[var(--hit-min)] w-full cursor-pointer items-center gap-15 rounded-sm border border-transparent bg-transparent px-2 py-1 text-left font-ui text-body font-medium italic text-ink-2',
+        'hover:border-rule hover:bg-hover-raised hover:text-ink-1',
+        WASH,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        /* the mark sits in the same 12px slot the version rows use for their state
+           light, so the menu keeps one column: state on a version, act on this row.
+           Typed, like the fold row's –, not drawn: a plus is a glyph the house faces
+           set at the right weight and advance. */
+        className="grid w-3 shrink-0 place-items-center text-[13px] leading-none not-italic"
+      >
+        +
+      </span>
+      {label}
+    </button>
+  )
+}

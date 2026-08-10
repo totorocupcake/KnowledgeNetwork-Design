@@ -1,0 +1,91 @@
+import type { InstrumentGroupProps } from '../contracts'
+import { WASH, cx } from '../wash'
+import { caretStyle } from '../nav/tree-row'
+
+/** The shared label column for a SET of families: the longest name, in ch, so
+ *  every count in the list lands on the same x even when one family is called
+ *  "reference views". Measure once in the consumer and pass the result to every
+ *  InstrumentGroup in that list — a per-row width would re-orphan the numbers. */
+export function FamilyColumn(labels: Array<string>) {
+  const longest = labels.reduce((n, l) => Math.max(n, String(l).length), 0)
+  return 'max(76px, ' + (longest + 1) + 'ch)'
+}
+
+/** A family of instruments in the palette. Collapsible, and it reports how many
+ *  of its members are on screen so a folded group still tells you something.
+ *  Uses the tree's grammar — the drawn caret in a 16px slot and a 16px indent on
+ *  the children, matching TreeRow exactly — because the palette is a containment
+ *  list too, and the system should not invent a second way to nest things.
+ *
+ *  The count sits BESIDE its label, not flush right: with several families open a
+ *  right-hand column of numbers is a column of orphans — proximity is what binds a
+ *  number to its name, not alignment. It still gets both, because the label runs
+ *  in a 76px MINIMUM column (family names are one or two short words by rule), so
+ *  every count lands on the same x, one word from the name it counts. When a list
+ *  holds a name too long for that, widen the column for the WHOLE list —
+ *  FamilyColumn(labels) above — so the numbers move right together and stay a
+ *  column. A name that still overruns pushes its own count out of line rather than
+ *  truncating; truncation is the last resort, when even the pane is too narrow.
+ *
+ *  A family label is a SUB-head: `text-ink-2` at medium, one step quieter than the
+ *  pane's section head (SectionLabel, `text-ink-1` bold) that sits above it. Never
+ *  raise it to `text-ink-1` — the head would then be lighter than its own children.
+ *  An OPEN group says so in weight, not in ink: label and count go medium →
+ *  semibold together (name and number are one head, never lit half-on) and the
+ *  caret `text-ink-3` → `text-ink-2`. The open head lands at the weight of an ON
+ *  row but a step lighter in ink — far enough to find, never heavy enough to
+ *  out-shout the instruments it contains. Bold belongs to SectionLabel, above it. */
+export function InstrumentGroup({
+  label,
+  open = true,
+  onToggle,
+  count = 0,
+  labelWidth = 76,
+  children,
+}: InstrumentGroupProps) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cx(
+          'box-border flex min-h-6 w-full cursor-pointer items-center gap-15 rounded-sm border border-transparent bg-transparent px-2 py-[3px] text-left text-ink-2 hover:bg-hover',
+          WASH,
+        )}
+      >
+        <span
+          className={cx(
+            'grid w-4 shrink-0 place-items-center transition-colors duration-[var(--dur-hover)] ease-soft',
+            open ? 'text-ink-2' : 'text-ink-3',
+          )}
+        >
+          <span style={caretStyle(open)} />
+        </span>
+        <span
+          className={cx(
+            'shrink grow-0 basis-auto truncate font-display text-caption',
+            open ? 'font-semibold' : 'font-medium',
+          )}
+          style={{ minWidth: labelWidth }}
+        >
+          {label}
+        </span>
+        {count > 0 ? (
+          <span
+            className={cx(
+              '-ml-05 shrink-0 font-mono text-micro tabular-nums text-primary-ink',
+              /* JetBrains Mono ships 400 and 500 only, so the count steps
+                 regular → medium: 600 would synthesise back to 500 and the number
+                 would sit unlit beside a label that had clearly moved. */
+              open ? 'font-medium' : 'font-normal',
+            )}
+          >
+            {count}
+          </span>
+        ) : null}
+        <span className="flex-1" />
+      </button>
+      {open ? <div className="flex flex-col gap-px pl-4">{children}</div> : null}
+    </div>
+  )
+}

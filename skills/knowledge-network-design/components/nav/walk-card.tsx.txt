@@ -1,0 +1,23 @@
+import type { WalkCardProps } from '../contracts'
+import { WASH, cx } from '../wash'
+
+/** An authored walk offered where it passes through. Walks-as-content, not history. */
+export function WalkCard({ title, meta, active, onClick }: WalkCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        'block w-full cursor-pointer rounded-md border border-acorn-200 px-[14px] py-[10px] text-left font-ui hover:bg-acorn-100',
+        active ? 'bg-acorn-100 shadow-lift-1' : 'bg-walk-wash',
+        WASH,
+      )}
+    >
+      <div className="flex items-center gap-[7px]">
+        <span className="text-caption text-walk">{'\u25b6'}</span>
+        <span className="text-body font-bold text-ink-walk">{title}</span>
+      </div>
+      {meta ? <div className="mt-[3px] text-caption leading-snug text-ink-2">{meta}</div> : null}
+    </button>
+  )
+}

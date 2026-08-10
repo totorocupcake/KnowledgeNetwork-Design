@@ -1,0 +1,24 @@
+import type { TrailChipProps } from '../contracts'
+import { WASH, cx, domainBg } from '../wash'
+
+/** One entry of the append-only trail. A jump is accented so the divergence from
+ *  the breadcrumb is visible. */
+export function TrailChip({ title, domain, via, jump, onClick }: TrailChipProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={via ? via + ' \u00b7 ' + title : title}
+      className={cx(
+        'inline-flex shrink-0 cursor-pointer items-center gap-15 whitespace-nowrap rounded-full border px-[11px] py-[5px] font-ui text-body font-semibold text-ink-1',
+        jump ? 'border-acorn-300 bg-walk-wash' : 'border-hair bg-raised hover:bg-hover',
+        WASH,
+      )}
+    >
+      {jump ? <span className="shrink-0 text-walk">{'\u2933'}</span> : null}
+      <span className={cx('size-[7px] shrink-0 rounded-full', domainBg(domain))} />
+      <span className="max-w-[140px] truncate">{title}</span>
+      {via ? <span className="shrink-0 font-mono text-micro tracking-caps text-ink-3">{via}</span> : null}
+    </button>
+  )
+}

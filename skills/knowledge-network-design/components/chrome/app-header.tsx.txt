@@ -1,0 +1,28 @@
+import type { AppHeaderProps } from '../contracts'
+import { cx, domainBg } from '../wash'
+
+/** The product bar. Brand in plain type (P.Kt has no mark), the corpus line, the
+ *  live focus, counts, session actions. */
+export function AppHeader({ brand = 'P.Kt', product, corpusLine, focus, children }: AppHeaderProps) {
+  return (
+    <div className="flex shrink-0 items-center gap-3 border-b border-hair bg-paper px-5 py-[10px]">
+      <span className="flex shrink-0 items-baseline gap-2">
+        <span className="font-display text-title font-bold tracking-display text-moss-600">{brand}</span>
+        <span className="font-display text-title font-bold text-ink-1">{product}</span>
+      </span>
+      {corpusLine ? (
+        <span className="truncate text-caption text-ink-3">{corpusLine}</span>
+      ) : null}
+      <span className="flex-1" />
+      {focus ? (
+        <span className="inline-flex shrink-0 items-center gap-15">
+          <span className={cx('size-[9px] rounded-full', domainBg(focus.domain))} />
+          <span className="whitespace-nowrap text-body font-semibold text-ink-1">{focus.title}</span>
+        </span>
+      ) : (
+        <span className="shrink-0 text-body text-ink-3">no focus</span>
+      )}
+      <span className="flex shrink-0 items-center gap-2">{children}</span>
+    </div>
+  )
+}

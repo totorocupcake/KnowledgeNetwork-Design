@@ -1,0 +1,21 @@
+import type { DocHeaderProps } from '../contracts'
+import { cx, domainText } from '../wash'
+
+/** The head of a node's document: what kind of thing it is, its name, and where
+ *  it sits — three different KINDS of string stacked, so each is treated as its
+ *  own kind. The eyebrow is a category (closed set, uppercase, the only uppercase
+ *  in the app); the title is a name (verbatim from the corpus, in the domain hue);
+ *  the path is a location (root first, joined with "/", never abbreviated to the
+ *  parent alone). All three are named strings, so none of them takes `text-ink-3`
+ *  — that ink is for the app's own hints. */
+export function DocHeader({ kind, title, domain, ancestry }: DocHeaderProps) {
+  return (
+    <div className="border-b border-hair px-5 pt-[14px] pb-3">
+      <div className="text-micro font-bold uppercase tracking-caps text-ink-2">{kind}</div>
+      <div className={cx('mt-[3px] font-display text-head font-bold leading-tight tracking-display', domainText(domain))}>
+        {title}
+      </div>
+      {ancestry ? <div className="mt-[5px] text-caption text-ink-2">{ancestry}</div> : null}
+    </div>
+  )
+}

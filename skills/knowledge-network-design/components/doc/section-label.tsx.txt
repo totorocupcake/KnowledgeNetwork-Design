@@ -1,0 +1,27 @@
+import type { SectionLabelProps } from '../contracts'
+
+/** A small heading inside a pane. Lower case, with a bare count when there is one,
+ *  and an optional action pushed to the trailing edge. The action slot exists so a
+ *  head with a button beside it does not get hand-rolled — every hierarchy
+ *  inversion found in this system came from a head written inline.
+ *
+ *  The count is mono at `text-ink-2`: mono marks it as a NUMBER, not a quieter
+ *  word, and the ink step says the head names the thing while the number only
+ *  reports on it. It is deliberately not emphasised with the label — but it drops
+ *  ONE step, not three: medium, not regular, so the pair reads as one head with a
+ *  figure attached rather than a bold word trailing an afterthought. (Mono is
+ *  loaded at 400 and 500 only, so medium is the top of its range.) */
+export function SectionLabel({ children, count, action }: SectionLabelProps) {
+  return (
+    <div className="mb-2 flex w-full items-baseline gap-15 font-display text-caption font-bold text-ink-1">
+      <span>{children}</span>
+      {count != null ? <span className="font-mono font-medium tabular-nums text-ink-2">{count}</span> : null}
+      {action ? (
+        <>
+          <span className="flex-1" />
+          <span className="inline-flex items-center gap-15">{action}</span>
+        </>
+      ) : null}
+    </div>
+  )
+}

@@ -1,0 +1,51 @@
+import type { EdgeDashProps, EdgeLegendProps } from '../contracts'
+import { cx } from '../wash'
+
+export const EDGE = {
+  depends_on: { color: 'var(--edge-depends-on)', label: 'builds on' },
+  uses: { color: 'var(--edge-uses)', label: 'uses' },
+  see_also: { color: 'var(--edge-see-also)', label: 'see also' },
+  implemented_with: { color: 'var(--edge-implemented-with)', label: 'implemented with' },
+} as const
+
+/** The relation dash. An SVG rect with crispEdges rather than a CSS box: a 3px CSS
+ *  bar lands on a different subpixel offset in every row (fractional line boxes
+ *  above it), so some dashes antialias across 4 device rows and read visibly
+ *  thicker than their neighbours. crispEdges snaps every dash to the same
+ *  device-pixel height, whatever its position. Use it anywhere a hairline-scale bar
+ *  repeats down a list. */
+export function EdgeDash({ color, width = 18 }: EdgeDashProps) {
+  return (
+    <svg
+      width={width}
+      height={3}
+      viewBox={'0 0 ' + width + ' 3'}
+      shapeRendering="crispEdges"
+      className="block flex-none"
+      aria-hidden="true"
+    >
+      <rect width={width} height={3} fill={color} />
+    </svg>
+  )
+}
+
+/** The four authored relations, as a legend. Labels are the corpus's own
+ *  EDGE_LABEL strings — never re-worded here. */
+export function EdgeLegend({
+  types = ['depends_on', 'uses', 'see_also', 'implemented_with'],
+  vertical,
+}: EdgeLegendProps) {
+  return (
+    <div className={cx('flex flex-wrap', vertical ? 'flex-col gap-15' : 'flex-row gap-3')}>
+      {types.map((t) => (
+        <span
+          key={t}
+          className="inline-flex items-center gap-[7px] whitespace-nowrap text-caption font-medium text-ink-2"
+        >
+          <EdgeDash color={(EDGE as any)[t]?.color} />
+          {(EDGE as any)[t]?.label}
+        </span>
+      ))}
+    </div>
+  )
+}

@@ -1,0 +1,80 @@
+import type { CSSProperties } from 'react'
+import type { TreeRowProps } from '../contracts'
+import { WASH, cx, domainBg } from '../wash'
+
+/** The disclosure mark, drawn rather than set: two 1.5px strokes meeting at a
+ *  right angle, rotated −45° closed and +45° open. Font chevrons and triangles
+ *  both failed here — a fill out-inks the labels, and every hollow or angle-quote
+ *  glyph is too small and too oddly proportioned at 15px to read as a shape.
+ *
+ *  It stays a style object rather than becoming classes: it is a 6px geometric
+ *  primitive in `currentColor`, with a compound rotate+translate that has to be
+ *  exact. Callers put it in a 16px slot and colour it by setting the slot's ink. */
+export function caretStyle(open?: boolean): CSSProperties {
+  return {
+    width: 6,
+    height: 6,
+    boxSizing: 'border-box',
+    borderRight: '1.5px solid currentColor',
+    borderBottom: '1.5px solid currentColor',
+    borderRadius: 1,
+    transform: open ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg) translate(-1px, 1px)',
+    transition: 'transform var(--dur-hover) var(--ease-soft)',
+  }
+}
+
+/** One line of the containment tree. Single click selects, double click re-roots. */
+export function TreeRow({
+  title,
+  domain,
+  depth = 0,
+  container,
+  expanded,
+  current,
+  linkCount,
+  onSelect,
+  onToggle,
+  onZoom,
+}: TreeRowProps) {
+  return (
+    <div
+      onClick={onSelect}
+      onDoubleClick={onZoom}
+      className={cx(
+        'group mx-15 flex min-h-[var(--hit-min)] cursor-pointer items-center gap-[7px] rounded-sm py-1 pr-[10px] font-ui text-body',
+        current ? 'bg-primary-wash' : 'hover:bg-hover',
+        WASH,
+      )}
+      style={{ paddingLeft: 10 + depth * 16 }}
+    >
+      {container ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggle && onToggle()
+          }}
+          className="grid size-4 shrink-0 cursor-pointer place-items-center border-none bg-transparent p-0 leading-none text-ink-3"
+        >
+          <span style={caretStyle(expanded)} />
+        </button>
+      ) : (
+        <span className="w-4 shrink-0" />
+      )}
+      <span className={cx('size-2 shrink-0 rounded-full', domainBg(domain))} />
+      <span
+        className={cx(
+          'min-w-0 flex-1 truncate',
+          current ? 'font-bold text-primary-ink' : 'font-medium text-ink-1',
+        )}
+      >
+        {title}
+      </span>
+      {linkCount ? (
+        <span className="inline-flex shrink-0 items-center gap-[3px] text-micro tabular-nums text-ink-3">
+          {'\u2933'} {linkCount}
+        </span>
+      ) : null}
+    </div>
+  )
+}

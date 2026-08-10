@@ -85,28 +85,44 @@ from here. See **Caveats**.
 
 ## Index
 
+Everything in this table is in this folder or its siblings in the export. Paths are
+relative to the export root, so `../tokens/kn-tokens.css` is one level up.
+
 | Path | What |
 | --- | --- |
-| `styles.css` | the one file consumers link — `@import`s only |
-| `tokens/fonts.css` | the three faces, loaded from Google Fonts |
-| `tokens/typography.css` | the P.Kt ramp **and** the as-built 9–11px ramp |
-| `tokens/colors.css` | bark · moss · acorn · pond · berry, plus domain and edge identity |
-| `tokens/spacing.css` | the scale, the radii, and the road's layout constants |
-| `tokens/elevation.css` | warm lift/sink shadows and the ring set |
-| `tokens/motion.css` | durations, easing, the `drill-*` keyframes |
-| `tokens/base.css` | the element-level reset, and all scrollbar paint |
-| `assets/scrollbars.js` | scrollbar behaviour — the only script in the system |
-| `guidelines/*.html` | specimen cards — Brand · Colors · Type · Space · Motion |
+| `../tokens/kn-tokens.css` | every token as a CSS custom property — the runtime truth for `var(--moss-500)` |
+| `../tokens/kn-base.css` | element defaults, focus ring, `drill-*` keyframes, all scrollbar paint |
+| `../tailwind/kn-theme.css` | the Tailwind v4 `@theme` — what turns tokens into the classes the source below uses |
+| `../tailwind/kn-theme.v3.js` | Tailwind v3 fallback. Delete on v4 |
+| `../assets/scrollbars.js` | scrollbar behaviour — the only script in the system |
+| `../assets/leaf.png` | the one hand-drawn asset, masked by `LeafMark` |
 | `components/chrome/` | AppHeader · Toolbar · PaneHeader · PillButton · CountBadge · LeafMark |
 | `components/sidebar/` | PresetButton · InstrumentRow · InstrumentGroup · FamilyColumn · BinMark |
 | `components/graph/` | DomainDot · NodeChip · NodeArrow · NodeChain · EdgeEntry · EdgeLegend · EdgeDash |
 | `components/group/` | VersionedGroup |
 | `components/nav/` | TreeRow · TrailChip · StepDot · WalkCard |
 | `components/doc/` | DocHeader · SectionLabel |
-| `ui_kits/studio/` | the Studio, interactive, on the real corpus |
-| `templates/studio/` | the same Studio as a copyable starting point for consuming projects |
+| `components/<area>/*.tsx.txt` | **the component source**, TypeScript + Tailwind — port these, do not re-derive them. Drop the `.txt`; kebab-case filenames, PascalCase exports |
+| `components/contracts.d.ts` | every component's props in one file |
+| `components/<area>/*.prompt.md` | the per-component traps, one file each |
+| `components/wash.ts.txt` | the shared hover transition and the domain-hue class maps |
+| `studio/` | **the Studio**, the app shell to refactor onto: `studio-app.tsx.txt`, `panes.tsx.txt`, `corpus.ts.txt` |
 | `SKILL.md` | makes this folder usable as an Agent Skill |
-| `github.md` | the source association, for one-click upstream sync |
+
+The design system project upstream also holds `guidelines/*.html` specimen cards
+(Brand · Colors · Type · Space · Motion) and the authored `tokens/*.css` split by
+concern. Those are not exported — ask for a specimen if you need to see one rendered.
+| `components/sidebar/` | PresetButton · InstrumentRow · InstrumentGroup · FamilyColumn · BinMark |
+| `components/graph/` | DomainDot · NodeChip · NodeArrow · NodeChain · EdgeEntry · EdgeLegend · EdgeDash |
+| `components/group/` | VersionedGroup |
+| `components/nav/` | TreeRow · TrailChip · StepDot · WalkCard |
+| `components/doc/` | DocHeader · SectionLabel |
+| `components/<area>/*.tsx.txt` | **the component source**, TypeScript + Tailwind — port these, do not re-derive them. Drop the `.txt`; kebab-case filenames, PascalCase exports |
+| `components/contracts.d.ts` | every component's props in one file |
+| `components/<area>/*.prompt.md` | the per-component traps, one file each |
+| `components/wash.ts.txt` | the shared hover transition and the domain-hue class maps |
+| `studio/` | **the Studio**, the app shell to refactor onto: `studio-app.tsx.txt`, `panes.tsx.txt`, `corpus.ts.txt` |
+| `SKILL.md` | makes this folder usable as an Agent Skill |
 
 ### Components
 
@@ -125,8 +141,13 @@ Plus one exported helper, `FamilyColumn(labels)` — the shared label column for
 list of `InstrumentGroup`s. It is capitalised for the same reason the components
 are: `window.<Namespace>` carries capital-initial exports only.
 
-Every one has a counterpart in the source. Each carries a `.d.ts` props contract
-and a `.prompt.md` with a usage example.
+Every one has a counterpart in the source. Each carries a `.d.ts` props contract, a
+`.prompt.md` with a usage example, and — as of this export — **a `.tsx.txt`
+implementation in TypeScript and Tailwind classes** (strip the suffix on copy). Port it: it is the same
+component this design system renders, with the theme moved onto utility classes and
+only the genuinely non-class values (runtime drag geometry, SVG viewBoxes, the two
+drawn marks, `-webkit-line-clamp` stacks) left as inline styles. Re-deriving one from
+its prompt file loses measurements that took several passes to settle.
 
 **Intentional additions** — five, mostly consolidations rather than inventions:
 
@@ -620,7 +641,7 @@ should stay that way.
 
 The connections diagram used to be the second exception — a drawn one, SVG lines and
 circles ported from `PlexPanel.tsx`. It is not any more. `ConnectionsPane` in
-`ui_kits/studio/panes.jsx` draws its edges as `EdgeEntry` rows: DOM boxes, a text
+`studio/panes.tsx.txt` draws its edges as `EdgeEntry` rows: DOM boxes, a text
 arrowhead, and a shaft that is an SVG rect only for `EdgeDash`'s device-pixel reason
 — nothing about it is a picture. Nothing in the system is drawn now except `BinMark`
 and the disclosure caret.
@@ -652,6 +673,65 @@ Three rules the pane encodes, and any other view of the graph should:
 
 ---
 
+## Layout — the shell, and why the app looks different without it
+
+Most of what makes a screen look like this product is **composition**, not tokens.
+The palette and the type ramp are necessary and not sufficient: get the geometry
+wrong and the right colours still read as a different app. `studio/studio-app.tsx.txt` is
+the reference, and it is meant to be refactored onto rather than admired.
+
+**Four bands, outside in.**
+
+1. `h-screen flex flex-col bg-canopy` — the desk. Canopy (`#f2eee6`) is the ONLY
+   full-bleed background in the product. A pane never sits directly on white, and
+   white is never the page.
+2. `Toolbar` — `flex-none`, one docked action strip under nothing. The leaf motif is
+   cropped into its bottom-right corner and overflows its own strip on purpose.
+3. The surface — `flex-1 min-h-0 flex gap-3 p-3`. **The gutter and the inset are the
+   same 12px measure**: a pane's distance to its neighbour equals its distance to the
+   window edge, so the desk reads as one grid rather than as a frame around a frame.
+4. The palette at `w-[var(--sidebar-w)]` (208px, `shrink-0`), beside a column holding
+   the instrument row above and the trail below, both at `gap-3`.
+
+**The pane row is flex, and the flex numbers are the layout.** Each instrument
+declares its own share (`INSTRUMENTS[].flex`: Map 1.9, Connections 1.3, Document
+1.1); a pane with `flex: 0` takes a fixed width from a token instead (Tree at
+`--tree-w`, 240px; the trail at 116px). Do **not** replace this with a CSS grid of
+equal columns — the ratios are the composition, and a Map at the same width as a
+Document is a different product.
+
+**`min-w-0` on every pane wrapper is load-bearing.** A node title is unbounded corpus
+text. Without the floor override, one long name widens its own pane at its
+neighbours' expense and the composition shifts every time the focus changes. This is
+the single most commonly missed rule when the shell is rebuilt from a screenshot.
+
+**Every pane is the same box.** `PANE` in `studio/panes.tsx.txt`:
+`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible rounded-lg border
+border-frame bg-paper`. Three things about it are easy to get wrong:
+
+- **`overflow-visible`, not hidden.** `PaneHeader`'s legend variant sits ON the top
+  border, and a hidden overflow clips it away — which is what makes a rebuilt pane
+  read as a plain card with a title inside it.
+- **`border-frame`, a visible bark hairline.** A pane's own frame is meant to be seen;
+  it is not `border-hair`, which divides things *inside* a pane.
+- **The scroller is a child, and it carries `mb-3`** (`PANE_BODY`). That strip holds
+  the scrollbar's bottom arrow clear of the pane's `rounded-lg` corner. The pane's
+  own paper fills it, so it reads as nothing at all — until it is missing, and the
+  scrollbar collides with the curve.
+
+**Depth is the only containment signal.** Four surfaces, and they nest in one
+direction: `bg-canopy` (desk) → `bg-paper` (pane) → `bg-raised` (a card or a node) →
+`bg-sunken` / `bg-sunken-2` with `--sink-1` (a well). A group is a well; a node is
+raised; nothing says "group" with a colour or a coloured border. One step of
+elevation, never two, and never a lift and a sink on the same element.
+
+**Density.** Pane padding is `p-3` with `pt-4` where a legend header sits above it;
+row gaps inside a pane are `gap-2` or `gap-3`; controls are 18–30px and hit targets
+floor at `--hit-min` (28px). The product is dense on purpose — but nothing a person
+*reads* goes below `--fs-body` (13px).
+
+---
+
 ## Caveats — read these
 
 1. **The fonts are a choice, not a recovery.** The app ships no webfont at all.
@@ -677,9 +757,10 @@ Three rules the pane encodes, and any other view of the graph should:
 4. **The type ramp was raised.** 9–11px is what the app renders; 11–13px is what
    this system recommends. Recreations of the current build should use
    `--asbuilt-fs-*`.
-5. **Ten of fifteen instruments are not recreated** in the UI kit, and the
-   Railroad authoring surface is covered by the earlier design system in the repo
-   rather than duplicated here. `ui_kits/studio/README.md` lists exactly which.
+5. **Ten of fifteen instruments are not recreated.** `studio/studio-app.tsx.txt` ships
+   four — Map, Tree, Connections, Document — and its `FAMILIES` list names the rest
+   with `soon: true` rather than faking them. The Railroad authoring surface is
+   covered by the earlier design system in the repo rather than duplicated here.
 6. **Document prose is not mirrored.** `src/corpus/docs.ts` and `deep.ts` were
    not copied, and no substitute prose was written.
 7. **Component cards are live mounts** of the compiled bundle, so they need

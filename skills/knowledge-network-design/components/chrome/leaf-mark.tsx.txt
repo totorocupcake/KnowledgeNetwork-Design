@@ -1,0 +1,77 @@
+import type { LeafMarkProps } from '../contracts'
+
+/* Measured from assets/leaf.png (1870×841): the blade's pointed tip sits at 45.1%
+   of the artwork's height and runs to the very last pixel column, so anchoring the
+   mark's right edge puts the tip exactly on that edge. RATIO is the artwork's
+   aspect. Re-measure both if the drawing is ever replaced. */
+const RATIO = 2.224
+const TIP_Y = 0.451
+/* how much of the mark hangs below the rule when tipOnRule is set. The tip itself
+   would sit exactly on the line at (1 - TIP_Y); lifting it by 0.12 of the height
+   raises the blade until its top edge just clears the strip, which is the most
+   leaf you can show without shaving the upper lobes off. */
+const HANG = 1 - TIP_Y - 0.12
+
+/** The house brand motif: a hand-drawn wavy leaf. This is a REAL DRAWN ASSET
+ *  (assets/leaf.png), not a generated shape — the first hand-drawn material in
+ *  the system, and the thing that gives the palette its warmth. Do not redraw it
+ *  in SVG, do not trace it, do not "clean it up": the wobble in the line is the
+ *  point.
+ *
+ *  The artwork is drawn ALREADY CROPPED — the blade runs off the right edge of its
+ *  own canvas, with empty space at the left and bottom — so it is meant to be
+ *  anchored into a corner and clipped, not centred in a box.
+ *
+ *  The PNG is drawn in a very pale green, too faint to read as chrome, so it is
+ *  used as a MASK and painted with a token colour instead of shown directly.
+ *  That keeps the drawn line exactly as it was while letting the system control
+ *  its weight — and it means the motif inherits the palette rather than pinning
+ *  one hard-coded green.
+ *
+ *  It is painted in `--moss-600`, the SAME green as the wordmark, and held back
+ *  with opacity rather than with a paler swatch. There is one brand green; the
+ *  motif is quieter than the wordmark because it is more transparent, not because
+ *  it is a different colour.
+ *
+ *  It is a MOTIF, not an icon: decorative, non-interactive, carries no state, and
+ *  the closest thing P.Kt has to a mark (there is no logo file). Keep it quiet —
+ *  one per surface, cropped by its container.
+ *
+ *  The mask stays an inline style on purpose: `base` is resolved at runtime, and a
+ *  Tailwind arbitrary value containing a runtime URL cannot be generated at build
+ *  time. Everything else here is geometry, which is also not Tailwind's job.
+ *
+ *  `base` is the path to the asset root from the consuming page. */
+export function LeafMark({
+  size = 96,
+  opacity = 0.55,
+  color = 'var(--moss-600)',
+  base = '.',
+  tipOnRule,
+  title,
+}: LeafMarkProps) {
+  const url = 'url("' + base + '/assets/leaf.png")'
+  return (
+    <span
+      role={title ? 'img' : undefined}
+      aria-label={title || undefined}
+      aria-hidden={title ? undefined : 'true'}
+      className="block shrink-0"
+      style={{
+        height: size,
+        width: size * RATIO,
+        marginBottom: tipOnRule ? -HANG * size : 0,
+        background: color,
+        opacity,
+        WebkitMaskImage: url,
+        maskImage: url,
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+      }}
+    />
+  )
+}

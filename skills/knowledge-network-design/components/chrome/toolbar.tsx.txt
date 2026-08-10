@@ -1,0 +1,73 @@
+import { Fragment } from 'react'
+import type { ToolbarProps, ToolbarItemProps } from '../contracts'
+import { WASH, cx } from '../wash'
+
+/** A docked strip of actions that sits directly under the app bar. Items are
+ *  pills; groups are separated by a hairline rule, never by extra space alone. */
+export function Toolbar({ groups = [], trailing, dense, brand, motif }: ToolbarProps) {
+  return (
+    <div
+      className={cx(
+        'relative flex shrink-0 items-center overflow-hidden border-b border-hair bg-paper',
+        dense ? 'gap-2 px-4 py-[5px]' : 'gap-3 px-5 py-[7px]',
+      )}
+    >
+      {motif ? <span className="pointer-events-none absolute right-0 bottom-0 leading-none">{motif}</span> : null}
+      {brand ? (
+        <span className="mr-05 shrink-0 font-display text-title font-bold tracking-display text-moss-600">{brand}</span>
+      ) : null}
+      {groups.map((g, gi) => (
+        <Fragment key={gi}>
+          {gi > 0 ? <span className="h-[18px] w-px shrink-0 self-center bg-frame" /> : null}
+          <div className="flex min-w-0 items-center gap-15">
+            {g.label ? (
+              <span className="mr-05 shrink-0 text-micro font-bold uppercase tracking-caps text-ink-3">{g.label}</span>
+            ) : null}
+            {g.items.map((it, i) => (
+              <ToolbarItem key={i} {...it} dense={dense} />
+            ))}
+          </div>
+        </Fragment>
+      ))}
+      <span className="flex-1" />
+      {trailing ? <div className="relative flex shrink-0 items-center gap-2">{trailing}</div> : null}
+    </div>
+  )
+}
+
+/* An icon-only strip built entirely from the existing glyph vocabulary — an ON
+   item states itself in weight AND a wash, so the strip is readable without
+   colour. */
+function ToolbarItem({ label, glyph, title, on, disabled, tone, onClick, dense }: ToolbarItemProps & { dense?: boolean }) {
+  const walk = tone === 'walk'
+  const skin = on
+    ? walk
+      ? 'border-acorn-300 bg-walk-wash text-ink-walk'
+      : 'border-moss-300 bg-primary-wash text-primary-ink'
+    : cx(
+        'border-transparent bg-transparent',
+        disabled ? 'text-ink-3' : tone === 'primary' ? 'text-primary-ink' : 'text-ink-2',
+        'enabled:hover:border-rule enabled:hover:bg-hover',
+      )
+  return (
+    <button
+      type="button"
+      title={title || label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cx(
+        'inline-flex shrink-0 items-center justify-center gap-15 whitespace-nowrap rounded-full border font-ui leading-none',
+        'cursor-pointer disabled:cursor-not-allowed disabled:opacity-[var(--opacity-disabled)]',
+        dense ? 'h-6 min-h-6' : 'h-[30px] min-h-[30px]',
+        label ? (dense ? 'px-[9px] py-[3px]' : 'px-[11px] py-[5px]') : dense ? 'w-6 p-0' : 'w-[30px] p-0',
+        label ? 'text-body' : 'text-title',
+        on ? 'font-bold' : 'font-semibold',
+        skin,
+        WASH,
+      )}
+    >
+      {glyph ? <span className="opacity-85">{glyph}</span> : null}
+      {label}
+    </button>
+  )
+}
